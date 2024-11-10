@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"neslib.h": "c",
+			"defs.h": "c",
+			"stdio.h": "c",
+			"logic.h": "c",
+			"nesdoug.h": "c",
+			"fcwa.h": "c"
+		}
+	}
+}
