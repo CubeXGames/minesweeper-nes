@@ -10,9 +10,9 @@ void main(void) {
     initState();
 	
     gameMode |= (0b1 << 3);
-    generateBoard();
 
 	ppu_off(); //screen off
+    generateBoard();
 
     //palettes
 	pal_bg(bgPalette);
@@ -20,39 +20,26 @@ void main(void) {
 
     bank_spr(1);
 
-    set_vram_buffer();
+    for(global_i = 0; global_i < HARD_MAX_X; ++global_i) {
 
-    ppu_on_all();
-
-    temp0 = 0;
-    temp1 = 0;
-    temp3 = 0;
-    global_j = 0;
-    global_i = 0;
-
-    {
-
-        here:
-
-        ppu_wait_nmi();
-
-        temp0 = 0;
-        for(; global_j < HARD_MAX_Y; ++global_j) {
-
-            for(; global_i < HARD_MAX_X; ++global_i) {
-                
-                temp2 = 0x8 + (((global_i & 0b1) ^ (global_j & 0b1)) << 1); //offset
-                temp2 += getTileIsMineHard(global_i, global_j); //1 = mine, 0 = no mine
-                one_vram_buffer(temp2, NTADR_A(global_i, global_j + 3));
-                ++temp0;
-                if(temp0 > 25) goto here; //only 25 updates per frame
-            }
-
-            global_i = 0;
+        for(global_j = 0; global_j < HARD_MAX_Y; ++global_j) {
+            
+            temp2 = 0x8 + (((global_i & 0b1) ^ (global_j & 0b1)) << 1); //tile num, alternates as a checkerboard
+            //xTemp = global_i;
+            //yTemp = global_j;
+            //temp2 += getTileIsMineHard(); //1 = mine, 0 = no mine
+            vram_adr(NTADR_A(global_i, global_j + 3));
+            vram_put(temp2);
         }
     }
 
-    ppu_wait_nmi();
+    ppu_on_all();
+
+    set_vram_buffer();
+
+    printNumber(cursorX, 1, 1);
+    printNumber(cursorY, 4, 1);
+    printNumber(numFlags, 7, 1);
 
     while(TRUE) {
 
