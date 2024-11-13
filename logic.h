@@ -31,10 +31,12 @@ randomState rngState;
 uchar prevController;
 uchar controller;
 
-uchar gameMode; //bits 0-2: which screen you're on, 3: easy or hard mode
+uchar gameMode; //bits 0-2: which screen you're on, 3: easy or hard mode, 4: board is updating
 
 uchar cursorX;
 uchar cursorY;
+
+uchar tempTileX, tempTileY;
 
 uchar numFlags;
 
@@ -46,6 +48,12 @@ sprite hardSelectionSprite;
 uchar boardIsMine[BOARD_MEM_SIZE];
 uchar boardIsActivated[BOARD_MEM_SIZE];
 uchar boardIsFlag[BOARD_MEM_SIZE];
+
+uchar fillStackX[FILL_STACK_SIZE];
+uchar fillStackY[FILL_STACK_SIZE];
+uchar fillStackPos;
+
+uchar debugTemp0;
 
 const char bgPalette[] = {
 
@@ -68,7 +76,7 @@ inline void updateController(void) {
     prevController = controller;
     controller = pad_poll(0);
 
-    //mask out l+r or u+d inputs (now i am officially anti-tas)
+    //mask out l+r or u+d inputs (i have been officially labeled anti-tas now)
     if((controller & PAD_LEFT) && (controller & PAD_RIGHT)) controller &= ~(0b11u);
     if((controller & PAD_UP) && (controller & PAD_DOWN)) controller &= ~(0b1100u);
 }
@@ -86,7 +94,7 @@ inline void updateRNG(void) {
 	rngState.longState ^= rngState.longState << 8;
 }
 
-//for sub-frame calls (no super-rng manip for yü mr tas)
+//for sub-frame calls (no fancy schmancy rng manip for yü mr tas)
 void updateRNGNoController(void) {
 
     rngState.longState ^= rngState.longState << 7;
@@ -190,7 +198,7 @@ inline void setTileIsFlagEasy(uchar value) {
 
 #pragma endregion
 
-//todo fix number length
+//todo fix number length bug
 void printNumberDebug(unsigned short number, uchar x, uchar y) {
 
     uchar output = 0;
@@ -272,7 +280,6 @@ void printNumber(uchar number, uchar x, uchar y) {
 
         one_vram_buffer(temp2 + NUMBER_TO_TILE, NTADR_A(x, y));
         offset += 0b10000001;
-        //hasNumberBegun = TRUE;
     }
 
     temp2 = 0;
@@ -299,10 +306,120 @@ void printNumber(uchar number, uchar x, uchar y) {
     }
 }
 
-//uses temp2
+//uses temp2, cursorX, cursorY, doesn't check if space is already a mine, todo make more efficient? dunno what else i could do
 uchar countMinesAroundTileHard(void) {
 
-    
+    temp2 = 0;
+    if(cursorX == 0) {
+
+        if(cursorY == 0) {
+            
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+            ++cursorY;
+            temp2 += getTileIsMineHard();
+            --cursorX;
+            temp2 += getTileIsMineHard();
+        } else if(cursorY == (HARD_MAX_Y - 1)) {
+
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+            --cursorX;
+            temp2 += getTileIsMineHard();
+        } else {
+
+            ++cursorY;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+            --cursorX;
+            temp2 += getTileIsMineHard();
+        }
+    } else if(cursorX == (HARD_MAX_X - 1)) {
+
+        if(cursorY == 0) {
+
+            --cursorX;
+            temp2 += getTileIsMineHard();
+            ++cursorY;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+        } else if(cursorY == (HARD_MAX_Y - 1)) {
+
+            --cursorX;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+        } else {
+
+            ++cursorY;
+            temp2 += getTileIsMineHard();
+            --cursorX;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+        }
+    } else {
+
+        if(cursorY == 0) {
+
+            --cursorX;
+            temp2 += getTileIsMineHard();
+            ++cursorY;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+        } else if(cursorY == (HARD_MAX_Y - 1)) {
+
+            --cursorX;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+            ++cursorY;
+            temp2 += getTileIsMineHard();
+        } else {
+
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+            ++cursorY;
+            temp2 += getTileIsMineHard();
+            --cursorX;
+            temp2 += getTileIsMineHard();
+            --cursorX;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+            --cursorY;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+            ++cursorX;
+            temp2 += getTileIsMineHard();
+        }
+    }
+
+    return temp2;
 }
 
 //kinda slow, todo make faster?
@@ -314,6 +431,8 @@ void generateBoard(void) {
     //temp1 = board size y
     //temp2 = array size to go through
     //temp3 = boardIsMine[global_i]
+
+    gameMode |= 0b1 << 4; //set board is updating
 
     if((gameMode >> 3) & 0b1) { //is the game in hard mode?
 
@@ -358,6 +477,363 @@ void generateBoard(void) {
         boardIsActivated[global_i] = 0;
         boardIsFlag[global_i] = 0;
     }
+
+    gameMode &= ~(0b1 << 4); //clear board is updating
+}
+
+//returns the number of mines around it in temp2, uses temp2
+void activateTile(void) {
+
+    setTileIsActivatedHard(TRUE);
+
+    countMinesAroundTileHard();
+    one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(tempTileX, tempTileY + 3));
+}
+
+//checks temp0, waits a frame if too many updates
+void activateTileNoCount(void) {
+
+    setTileIsActivatedHard(TRUE);
+    one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 3));
+
+    ++temp0;
+    if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
+
+        ppu_wait_nmi();
+        temp0 = 0;
+    }
+}
+
+//separated into a different function to avoid the update function getting too big, uses temp0, could potentially take >1 frame
+inline void floodFillZerosHard(void) {
+
+    one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
+    debugTemp0 = 5;
+
+    fillStackPos = 0;
+    fillStackX[0] = cursorX;
+    fillStackY[0] = cursorY;
+
+    temp0 = 0;
+    do {
+
+        cursorX = fillStackX[fillStackPos];
+        cursorY = fillStackY[fillStackPos];
+
+        setTileIsActivatedHard(TRUE);
+        one_vram_buffer(NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 3));
+
+        ++temp0;
+        if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
+
+            ppu_wait_nmi();
+            temp0 = 0;
+        }
+
+        if(cursorX == 0) {
+
+            if(cursorY == 0) {
+                
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                ++cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+            } else if(cursorY == (HARD_MAX_Y - 1)) {
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+                
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+            } else {
+
+                ++cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+                
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+                
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+            }
+        } else if(cursorX == (HARD_MAX_X - 1)) {
+
+            if(cursorY == 0) {
+
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                ++cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+            } else if(cursorY == (HARD_MAX_Y - 1)) {
+
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+            } else {
+
+                ++cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+            }
+        } else {
+
+            if(cursorY == 0) {
+
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                ++cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+            } else if(cursorY == (HARD_MAX_Y - 1)) {
+
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+                
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                ++cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+            } else {
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+                
+                ++cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                --cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                --cursorY;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 == 0) {
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = cursorX;
+                    fillStackY[fillStackPos] = cursorY;
+                } else activateTileNoCount();
+
+                ++cursorX;
+                temp2 = getTileIsMineHard();
+                if(temp2 != 0) activateTileNoCount();
+            }
+        }
+    
+        --fillStackPos;
+    } while(fillStackPos > 0);
+
+    temp0 = 0;
 }
 
 //uses temp0
@@ -365,7 +841,14 @@ void hardUpdate(void) {
 
     //update cursor x and y, wrap around the screen as needed
 
+    if(debugTemp0) {
+
+        --debugTemp0;
+        if(!debugTemp0) one_vram_buffer(0x09, PALETTE_MEMORY_BEGIN + 0x0); //make the screen normal again
+    }
+
     //BEGIN using temp1 = is button pressed
+    //used assembly for the bpl instruction, the compiler might not generate it if I compared the number to 255 or something like that
 
     __asm__("lda #$00");
     __asm__("sta %v", temp1);
@@ -428,7 +911,7 @@ void hardUpdate(void) {
         printNumber(cursorY, 4, 1);
     }
 
-    //END of using temp1
+    //END using temp1
 
     hardSelectionSprite.xPos = cursorX << 3; //x8 to align w/ tiles
     hardSelectionSprite.yPos = (cursorY << 3) + 23; //1 less to be 1 higher (properly aligned)
@@ -440,11 +923,8 @@ void hardUpdate(void) {
         else one_vram_buffer(0x38, PALETTE_MEMORY_BEGIN + 0x11);
     }
 
-    oam_clear();
-    oam_spr(hardSelectionSprite.xPos, hardSelectionSprite.yPos, hardSelectionSprite.tile, hardSelectionSprite.attributes);
+    if(BUTTON_DOWN(PAD_B) && !getTileIsActivatedHard()) {
 
-    if(BUTTON_DOWN(PAD_B)) {
-        
         if(getTileIsFlagHard()) {
 
             ++numFlags;
@@ -460,13 +940,41 @@ void hardUpdate(void) {
         printNumber(numFlags, 7, 1);
     }
 
-    //END of using temp2
+    //END using temp2
+    //BEGIN using temp2: mines around tile
+    //BEGIN using temp0: number of flood-fill sprite updates this frame
+    
+    //cursor x and y are about to be clobbered so preserve them here
+    tempTileX = cursorX;
+    tempTileY = cursorY;
 
     //activating mines
     if(BUTTON_DOWN(PAD_A) && !getTileIsFlagHard() && !getTileIsActivatedHard()) {
 
-        
+        if(getTileIsMineHard()) {
+
+            //oof
+            one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
+            debugTemp0 = 5;
+        } else {
+
+            countMinesAroundTileHard();
+            if(temp2 == 0) floodFillZerosHard(); //enjoy
+            else {
+
+                cursorX = tempTileX;
+                cursorY = tempTileY;
+                activateTileNoCount();
+            }
+        }
+
+        //unclobber cursor x and y
+        cursorX = tempTileX;
+        cursorY = tempTileY;
     }
+
+    oam_clear();
+    oam_spr(hardSelectionSprite.xPos, hardSelectionSprite.yPos, hardSelectionSprite.tile, hardSelectionSprite.attributes);
 }
 
 inline void initState(void) {
@@ -491,7 +999,7 @@ void update(void) {
     hardUpdate();
 
     __asm__("inc %v", frameCount);
-    __asm__("bne @frameCountNoOverflow");
+    __asm__("bne @frameCountNoOverflow"); //aka zero flag is set aka overflow happened
     frameCountOverflow = TRUE;
     return;
 

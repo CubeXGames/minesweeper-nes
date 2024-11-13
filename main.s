@@ -40,12 +40,18 @@
 	.export		_gameMode
 	.export		_cursorX
 	.export		_cursorY
+	.export		_tempTileX
+	.export		_tempTileY
 	.export		_numFlags
 	.export		_numMinesSetInByte
 	.export		_hardSelectionSprite
 	.export		_boardIsMine
 	.export		_boardIsActivated
 	.export		_boardIsFlag
+	.export		_fillStackX
+	.export		_fillStackY
+	.export		_fillStackPos
+	.export		_debugTemp0
 	.export		_bgPalette
 	.export		_sprPalette
 	.export		_updateRNGNoController
@@ -55,7 +61,10 @@
 	.export		_setTileBaseEasy
 	.export		_printNumberDebug
 	.export		_printNumber
+	.export		_countMinesAroundTileHard
 	.export		_generateBoard
+	.export		_activateTile
+	.export		_activateTileNoCount
 	.export		_hardUpdate
 	.export		_update
 	.export		_main
@@ -137,6 +146,10 @@ _cursorX:
 	.res	1,$00
 _cursorY:
 	.res	1,$00
+_tempTileX:
+	.res	1,$00
+_tempTileY:
+	.res	1,$00
 _numFlags:
 	.res	1,$00
 .segment	"BSS"
@@ -148,6 +161,14 @@ _boardIsActivated:
 	.res	104,$00
 _boardIsFlag:
 	.res	104,$00
+_fillStackX:
+	.res	40,$00
+_fillStackY:
+	.res	40,$00
+_fillStackPos:
+	.res	1,$00
+_debugTemp0:
+	.res	1,$00
 
 ; ---------------------------------------------------------------
 ; void __near__ updateController (void)
@@ -1271,7 +1292,7 @@ L0016:	ora     ptr1
 ;
 	jsr     pusha
 ;
-; uchar offset = 0; //also for if the number's begun in bit 7
+; uchar offset = 0; //also for if the number's begun in bit 7 (save a stack variable)
 ;
 	lda     #$00
 	jsr     pusha
@@ -1496,6 +1517,448 @@ L0014:	ora     ptr1
 .endproc
 
 ; ---------------------------------------------------------------
+; unsigned char __near__ countMinesAroundTileHard (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_countMinesAroundTileHard: near
+
+.segment	"CODE"
+
+;
+; temp2 = 0;
+;
+	lda     #$00
+	sta     _temp2
+;
+; if(cursorX == 0) {
+;
+	lda     _cursorX
+	jne     L0015
+;
+; if(cursorY == 0) {
+;
+	lda     _cursorY
+	bne     L0013
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorY;
+;
+	inc     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; } else if(cursorY == (HARD_MAX_Y - 1)) {
+;
+	jmp     L001D
+L0013:	lda     _cursorY
+	cmp     #$19
+	bne     L0014
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; } else {
+;
+	jmp     L001D
+;
+; ++cursorY;
+;
+L0014:	inc     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; } else if(cursorX == (HARD_MAX_X - 1)) {
+;
+	jmp     L001D
+L0015:	lda     _cursorX
+	cmp     #$1F
+	bne     L0018
+;
+; if(cursorY == 0) {
+;
+	lda     _cursorY
+	bne     L0016
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorY;
+;
+	inc     _cursorY
+;
+; } else if(cursorY == (HARD_MAX_Y - 1)) {
+;
+	jmp     L0022
+L0016:	lda     _cursorY
+	cmp     #$19
+	bne     L0017
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; } else {
+;
+	jmp     L0022
+;
+; ++cursorY;
+;
+L0017:	inc     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; } else {
+;
+	jmp     L0022
+;
+; if(cursorY == 0) {
+;
+L0018:	lda     _cursorY
+	bne     L0019
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorY;
+;
+	inc     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; } else if(cursorY == (HARD_MAX_Y - 1)) {
+;
+	jmp     L001D
+L0019:	lda     _cursorY
+	cmp     #$19
+	bne     L001A
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorY;
+;
+	inc     _cursorY
+;
+; } else {
+;
+	jmp     L001D
+;
+; ++cursorX;
+;
+L001A:	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorY;
+;
+	inc     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; temp2 += getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+L0022:	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 += getTileIsMineHard();
+;
+L001D:	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
+; return temp2;
+;
+	ldx     #$00
+	lda     _temp2
+;
+; }
+;
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
 ; void __near__ generateBoard (void)
 ; ---------------------------------------------------------------
 
@@ -1506,9 +1969,14 @@ L0014:	ora     ptr1
 .segment	"CODE"
 
 ;
-; if((gameMode >> 3) & 0b1) { //is the game in hard mode?
+; gameMode |= 0b1 << 4; //set board is updating
 ;
 	lda     _gameMode
+	ora     #$10
+	sta     _gameMode
+;
+; if((gameMode >> 3) & 0b1) { //is the game in hard mode?
+;
 	lsr     a
 	lsr     a
 	lsr     a
@@ -1541,7 +2009,7 @@ L0014:	ora     ptr1
 ;
 ; } else {
 ;
-	jmp     L0016
+	jmp     L0017
 ;
 ; temp0 = EASY_NUM_MINES; //85 mines
 ;
@@ -1566,7 +2034,7 @@ L0013:	lda     #$46
 ;
 	ldx     #$00
 	lda     #$D0
-L0016:	sta     _tempShort0
+L0017:	sta     _tempShort0
 	stx     _tempShort0+1
 ;
 ; for(global_i = 0; global_i < temp2; global_i++) {
@@ -1575,7 +2043,7 @@ L0016:	sta     _tempShort0
 	sta     _global_i
 L0014:	lda     _global_i
 	cmp     _temp2
-	bcs     L0005
+	bcs     L0016
 ;
 ; temp3 = 0; //clear the board
 ;
@@ -1663,9 +2131,1369 @@ L0009:	ldy     _global_i
 	inc     _global_i
 	jmp     L0014
 ;
+; gameMode &= ~(0b1 << 4); //clear board is updating
+;
+L0016:	lda     _gameMode
+	and     #$EF
+	sta     _gameMode
+;
 ; }
 ;
-L0005:	rts
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ activateTile (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_activateTile: near
+
+.segment	"CODE"
+
+;
+; setTileIsActivatedHard(TRUE);
+;
+	lda     #$01
+	jsr     _setTileIsActivatedHard
+;
+; countMinesAroundTileHard();
+;
+	jsr     _countMinesAroundTileHard
+;
+; one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(tempTileX, tempTileY + 3));
+;
+	lda     _temp2
+	clc
+	adc     #$10
+	jsr     pusha
+	ldx     #$00
+	lda     _tempTileY
+	clc
+	adc     #$03
+	bcc     L0003
+	inx
+L0003:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _tempTileX
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jmp     _one_vram_buffer
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ activateTileNoCount (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_activateTileNoCount: near
+
+.segment	"CODE"
+
+;
+; setTileIsActivatedHard(TRUE);
+;
+	lda     #$01
+	jsr     _setTileIsActivatedHard
+;
+; one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 3));
+;
+	lda     _temp2
+	clc
+	adc     #$10
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	clc
+	adc     #$03
+	bcc     L0003
+	inx
+L0003:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _cursorX
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++temp0;
+;
+	inc     _temp0
+;
+; if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
+;
+	lda     _temp0
+	cmp     #$1E
+	bcc     L0004
+;
+; ppu_wait_nmi();
+;
+	jsr     _ppu_wait_nmi
+;
+; temp0 = 0;
+;
+	lda     #$00
+	sta     _temp0
+;
+; }
+;
+L0004:	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ floodFillZerosHard (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_floodFillZerosHard: near
+
+.segment	"CODE"
+
+;
+; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
+;
+	lda     #$06
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
+; debugTemp0 = 5;
+;
+	lda     #$05
+	sta     _debugTemp0
+;
+; fillStackPos = 0;
+;
+	lda     #$00
+	sta     _fillStackPos
+;
+; fillStackX[0] = cursorX;
+;
+	lda     _cursorX
+	sta     _fillStackX
+;
+; fillStackY[0] = cursorY;
+;
+	lda     _cursorY
+	sta     _fillStackY
+;
+; temp0 = 0;
+;
+	lda     #$00
+	sta     _temp0
+;
+; cursorX = fillStackX[fillStackPos];
+;
+L0002:	ldy     _fillStackPos
+	lda     _fillStackX,y
+	sta     _cursorX
+;
+; cursorY = fillStackY[fillStackPos];
+;
+	ldy     _fillStackPos
+	lda     _fillStackY,y
+	sta     _cursorY
+;
+; setTileIsActivatedHard(TRUE);
+;
+	lda     #$01
+	jsr     _setTileIsActivatedHard
+;
+; one_vram_buffer(NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 3));
+;
+	lda     #$10
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	clc
+	adc     #$03
+	bcc     L0007
+	inx
+L0007:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _cursorX
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++temp0;
+;
+	inc     _temp0
+;
+; if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
+;
+	lda     _temp0
+	cmp     #$1E
+	bcc     L008A
+;
+; ppu_wait_nmi();
+;
+	jsr     _ppu_wait_nmi
+;
+; temp0 = 0;
+;
+	lda     #$00
+	sta     _temp0
+;
+; if(cursorX == 0) {
+;
+L008A:	lda     _cursorX
+	jne     L0095
+;
+; if(cursorY == 0) {
+;
+	lda     _cursorY
+	bne     L008D
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L000B
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L008B
+L000B:	jsr     _activateTileNoCount
+;
+; ++cursorY;
+;
+L008B:	inc     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L008C
+	jsr     _activateTileNoCount
+;
+; --cursorX;
+;
+L008C:	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	jne     L0089
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00B2
+;
+; } else if(cursorY == (HARD_MAX_Y - 1)) {
+;
+L008D:	lda     _cursorY
+	cmp     #$19
+	bne     L0090
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0016
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L008E
+L0016:	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L008E:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L008F
+	jsr     _activateTileNoCount
+;
+; --cursorX;
+;
+L008F:	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	jne     L0089
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00B2
+;
+; ++cursorY;
+;
+L0090:	inc     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0020
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L0091
+L0020:	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L0091:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L0092
+	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L0092:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0025
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L0093
+L0025:	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L0093:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L0094
+	jsr     _activateTileNoCount
+;
+; --cursorX;
+;
+L0094:	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	jne     L0089
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00B2
+;
+; } else if(cursorX == (HARD_MAX_X - 1)) {
+;
+L0095:	lda     _cursorX
+	cmp     #$1F
+	jne     L00A0
+;
+; if(cursorY == 0) {
+;
+	lda     _cursorY
+	bne     L0098
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0031
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L0096
+L0031:	jsr     _activateTileNoCount
+;
+; ++cursorY;
+;
+L0096:	inc     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L0097
+	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L0097:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	jne     L0089
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00B2
+;
+; } else if(cursorY == (HARD_MAX_Y - 1)) {
+;
+L0098:	lda     _cursorY
+	cmp     #$19
+	bne     L009B
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L003C
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L0099
+L003C:	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L0099:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L009A
+	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L009A:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	jne     L0089
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00B2
+;
+; ++cursorY;
+;
+L009B:	inc     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0046
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L009C
+L0046:	jsr     _activateTileNoCount
+;
+; --cursorX;
+;
+L009C:	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L009D
+	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L009D:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L004B
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L009E
+L004B:	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L009E:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L009F
+	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L009F:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	jne     L0089
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00B2
+;
+; if(cursorY == 0) {
+;
+L00A0:	lda     _cursorY
+	jne     L00A5
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0056
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00A1
+L0056:	jsr     _activateTileNoCount
+;
+; ++cursorY;
+;
+L00A1:	inc     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L00A2
+	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L00A2:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L005B
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00A3
+L005B:	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L00A3:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L00A4
+	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L00A4:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	jne     L0089
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00B2
+;
+; } else if(cursorY == (HARD_MAX_Y - 1)) {
+;
+L00A5:	lda     _cursorY
+	cmp     #$19
+	jne     L00AA
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0066
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00A6
+L0066:	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L00A6:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L00A7
+	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L00A7:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L006B
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00A8
+L006B:	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L00A8:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L00A9
+	jsr     _activateTileNoCount
+;
+; ++cursorY;
+;
+L00A9:	inc     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	jne     L0089
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00B2
+;
+; ++cursorX;
+;
+L00AA:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0075
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00AB
+L0075:	jsr     _activateTileNoCount
+;
+; ++cursorY;
+;
+L00AB:	inc     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L00AC
+	jsr     _activateTileNoCount
+;
+; --cursorX;
+;
+L00AC:	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L007A
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00AD
+L007A:	jsr     _activateTileNoCount
+;
+; --cursorX;
+;
+L00AD:	dec     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L00AE
+	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L00AE:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L007F
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00AF
+L007F:	jsr     _activateTileNoCount
+;
+; --cursorY;
+;
+L00AF:	dec     _cursorY
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L00B0
+	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L00B0:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0084
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; } else activateTileNoCount();
+;
+	jmp     L00B1
+L0084:	jsr     _activateTileNoCount
+;
+; ++cursorX;
+;
+L00B1:	inc     _cursorX
+;
+; temp2 = getTileIsMineHard();
+;
+	jsr     _getTileIsMineHard
+	sta     _temp2
+;
+; if(temp2 != 0) activateTileNoCount();
+;
+	lda     _temp2
+	beq     L00B2
+L0089:	jsr     _activateTileNoCount
+;
+; --fillStackPos;
+;
+L00B2:	dec     _fillStackPos
+;
+; } while(fillStackPos > 0);
+;
+	lda     _fillStackPos
+	jne     L0002
+;
+; temp0 = 0;
+;
+	sta     _temp0
+;
+; }
+;
+	rts
 
 .endproc
 
@@ -1680,22 +3508,40 @@ L0005:	rts
 .segment	"CODE"
 
 ;
+; if(debugTemp0) {
+;
+	lda     _debugTemp0
+	beq     L0030
+;
+; --debugTemp0;
+;
+	dec     _debugTemp0
+;
+; if(!debugTemp0) one_vram_buffer(0x09, PALETTE_MEMORY_BEGIN + 0x0); //make the screen normal again
+;
+	bne     L0003
+	lda     #$09
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
 ; __asm__("lda #$00");
 ;
-	lda     #$00
+L0003:	lda     #$00
 ;
 ; __asm__("sta %v", temp1);
 ;
-	sta     _temp1
+L0030:	sta     _temp1
 ;
 ; if(BUTTON_DOWN(PAD_RIGHT)) {
 ;
 	lda     _controller
 	and     #$01
-	beq     L002D
+	beq     L0034
 	lda     _prevController
 	and     #$01
-	bne     L002D
+	bne     L0034
 ;
 ; __asm__("ldx %v", cursorX);
 ;
@@ -1732,12 +3578,12 @@ L0005:	rts
 ;
 ; if(BUTTON_DOWN(PAD_LEFT)) {
 ;
-L002D:	lda     _controller
+L0034:	lda     _controller
 	and     #$02
-	beq     L0031
+	beq     L0038
 	lda     _prevController
 	and     #$02
-	bne     L0031
+	bne     L0038
 ;
 ; __asm__("ldx %v", cursorX);
 ;
@@ -1770,12 +3616,12 @@ L002D:	lda     _controller
 ;
 ; if(BUTTON_DOWN(PAD_DOWN)) {
 ;
-L0031:	lda     _controller
+L0038:	lda     _controller
 	and     #$04
-	beq     L0035
+	beq     L003C
 	lda     _prevController
 	and     #$04
-	bne     L0035
+	bne     L003C
 ;
 ; __asm__("ldx %v", cursorY);
 ;
@@ -1812,12 +3658,12 @@ L0031:	lda     _controller
 ;
 ; if(BUTTON_DOWN(PAD_UP)) {
 ;
-L0035:	lda     _controller
+L003C:	lda     _controller
 	and     #$08
-	beq     L000E
+	beq     L0010
 	lda     _prevController
 	and     #$08
-	bne     L000E
+	bne     L0010
 ;
 ; __asm__("ldx %v", cursorY);
 ;
@@ -1850,8 +3696,8 @@ L0035:	lda     _controller
 ;
 ; if(temp1) {
 ;
-L000E:	lda     _temp1
-	beq     L0012
+L0010:	lda     _temp1
+	beq     L0014
 ;
 ; printNumber(cursorX, 1, 1);
 ;
@@ -1878,7 +3724,7 @@ L000E:	lda     _temp1
 ;
 ; hardSelectionSprite.xPos = cursorX << 3; //x8 to align w/ tiles
 ;
-L0012:	lda     _cursorX
+L0014:	lda     _cursorX
 	asl     a
 	asl     a
 	asl     a
@@ -1898,57 +3744,41 @@ L0012:	lda     _cursorX
 ;
 	lda     _frameCount
 	and     #$1F
-	bne     L0018
+	bne     L0041
 ;
 ; if((frameCount & 0b111111) == 0) one_vram_buffer(WHITE, PALETTE_MEMORY_BEGIN + 0x11);
 ;
 	lda     _frameCount
 	and     #$3F
-	bne     L0039
+	bne     L0040
 	lda     #$30
 ;
 ; else one_vram_buffer(0x38, PALETTE_MEMORY_BEGIN + 0x11);
 ;
-	jmp     L0046
-L0039:	lda     #$38
-L0046:	jsr     pusha
+	jmp     L0050
+L0040:	lda     #$38
+L0050:	jsr     pusha
 	ldx     #$3F
 	lda     #$11
 	jsr     _one_vram_buffer
 ;
-; oam_clear();
+; if(BUTTON_DOWN(PAD_B) && !getTileIsActivatedHard()) {
 ;
-L0018:	jsr     _oam_clear
-;
-; oam_spr(hardSelectionSprite.xPos, hardSelectionSprite.yPos, hardSelectionSprite.tile, hardSelectionSprite.attributes);
-;
-	jsr     decsp3
-	lda     _hardSelectionSprite+3
-	ldy     #$02
-	sta     (sp),y
-	lda     _hardSelectionSprite
-	dey
-	sta     (sp),y
-	lda     _hardSelectionSprite+1
-	dey
-	sta     (sp),y
-	lda     _hardSelectionSprite+2
-	jsr     _oam_spr
-;
-; if(BUTTON_DOWN(PAD_B)) {
-;
-	lda     _controller
+L0041:	lda     _controller
 	and     #$40
-	jeq     L003E
+	jeq     L0046
 	lda     _prevController
 	and     #$40
-	jne     L003E
+	jne     L0046
+	jsr     _getTileIsActivatedHard
+	tax
+	jne     L0046
 ;
 ; if(getTileIsFlagHard()) {
 ;
 	jsr     _getTileIsFlagHard
 	tax
-	beq     L003D
+	beq     L0045
 ;
 ; ++numFlags;
 ;
@@ -1973,9 +3803,9 @@ L0018:	jsr     _oam_clear
 ;
 ; } else if(numFlags > 0) {
 ;
-	jmp     L0056
-L003D:	lda     _numFlags
-	beq     L0021
+	jmp     L0060
+L0045:	lda     _numFlags
+	beq     L0023
 ;
 ; --numFlags;
 ;
@@ -1997,14 +3827,14 @@ L003D:	lda     _numFlags
 	asl     a
 	clc
 	adc     #$09
-L0056:	jsr     pusha
+L0060:	jsr     pusha
 	ldx     #$00
 	lda     _cursorY
 	clc
 	adc     #$03
-	bcc     L0023
+	bcc     L0025
 	inx
-L0023:	jsr     aslax4
+L0025:	jsr     aslax4
 	stx     tmp1
 	asl     a
 	rol     tmp1
@@ -2020,7 +3850,7 @@ L0023:	jsr     aslax4
 ;
 ; printNumber(numFlags, 7, 1);
 ;
-L0021:	jsr     decsp2
+L0023:	jsr     decsp2
 	lda     _numFlags
 	ldy     #$01
 	sta     (sp),y
@@ -2030,22 +3860,110 @@ L0021:	jsr     decsp2
 	lda     #$01
 	jsr     _printNumber
 ;
-; if(BUTTON_DOWN(PAD_A) && !getTileIsFlagHard()) {
+; tempTileX = cursorX;
 ;
-L003E:	lda     _controller
+L0046:	lda     _cursorX
+	sta     _tempTileX
+;
+; tempTileY = cursorY;
+;
+	lda     _cursorY
+	sta     _tempTileY
+;
+; if(BUTTON_DOWN(PAD_A) && !getTileIsFlagHard() && !getTileIsActivatedHard()) {
+;
+	lda     _controller
 	and     #$80
-	beq     L0040
+	beq     L0026
 	lda     _prevController
 	and     #$80
-	bne     L0040
+	bne     L0026
 	jsr     _getTileIsFlagHard
 	tax
-	beq     L0041
-L0040:	rts
+	bne     L0026
+	jsr     _getTileIsActivatedHard
+	tax
+	bne     L0026
 ;
-; }
+; if(getTileIsMineHard()) {
 ;
-L0041:	rts
+	jsr     _getTileIsMineHard
+	tax
+	beq     L002A
+;
+; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
+;
+	lda     #$06
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
+; debugTemp0 = 5;
+;
+	lda     #$05
+	sta     _debugTemp0
+;
+; } else {
+;
+	jmp     L004B
+;
+; countMinesAroundTileHard();
+;
+L002A:	jsr     _countMinesAroundTileHard
+;
+; if(temp2 == 0) floodFillZerosHard(); //enjoy
+;
+	lda     _temp2
+	bne     L004A
+	jsr     _floodFillZerosHard
+;
+; else {
+;
+	jmp     L004B
+;
+; cursorX = tempTileX;
+;
+L004A:	lda     _tempTileX
+	sta     _cursorX
+;
+; cursorY = tempTileY;
+;
+	lda     _tempTileY
+	sta     _cursorY
+;
+; activateTileNoCount();
+;
+	jsr     _activateTileNoCount
+;
+; cursorX = tempTileX;
+;
+L004B:	lda     _tempTileX
+	sta     _cursorX
+;
+; cursorY = tempTileY;
+;
+	lda     _tempTileY
+	sta     _cursorY
+;
+; oam_clear();
+;
+L0026:	jsr     _oam_clear
+;
+; oam_spr(hardSelectionSprite.xPos, hardSelectionSprite.yPos, hardSelectionSprite.tile, hardSelectionSprite.attributes);
+;
+	jsr     decsp3
+	lda     _hardSelectionSprite+3
+	ldy     #$02
+	sta     (sp),y
+	lda     _hardSelectionSprite
+	dey
+	sta     (sp),y
+	lda     _hardSelectionSprite+1
+	dey
+	sta     (sp),y
+	lda     _hardSelectionSprite+2
+	jmp     _oam_spr
 
 .endproc
 
@@ -2125,7 +4043,7 @@ L0041:	rts
 ;
 	inc     _frameCount
 ;
-; __asm__("bne @frameCountNoOverflow");
+; __asm__("bne @frameCountNoOverflow"); //aka zero flag is set aka overflow happened
 ;
 	bne     @frameCountNoOverflow
 ;
@@ -2224,6 +4142,23 @@ L0010:	lda     _global_j
 	adc     #$08
 	sta     _temp2
 ;
+; cursorX = global_i;
+;
+	lda     _global_i
+	sta     _cursorX
+;
+; cursorY = global_j;
+;
+	lda     _global_j
+	sta     _cursorY
+;
+; temp2 += getTileIsMineHard(); //1 = mine, 0 = no mine
+;
+	jsr     _getTileIsMineHard
+	clc
+	adc     _temp2
+	sta     _temp2
+;
 ; vram_adr(NTADR_A(global_i, global_j + 3));
 ;
 	ldx     #$00
@@ -2268,6 +4203,15 @@ L0003:	jsr     _ppu_on_all
 ; set_vram_buffer();
 ;
 	jsr     _set_vram_buffer
+;
+; cursorX = 0;
+;
+	lda     #$00
+	sta     _cursorX
+;
+; cursorY = 0;
+;
+	sta     _cursorY
 ;
 ; printNumber(cursorX, 1, 1);
 ;
