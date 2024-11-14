@@ -46,7 +46,8 @@ typedef union {
 #define NUMBER_TO_NUMBER_TILE 0x10
 
 #define FILL_STACK_SIZE 0x28
-#define MAX_FLOOD_FILL_UPDATES 30
+//has no effect on the function, only on the amount of reserved memory
+#define MAX_FLOOD_FILL_UPDATES 0x20
 
 #define PALETTE_MEMORY_BEGIN 0x3f00
 
