@@ -521,15 +521,12 @@ void popCursorXY(void) {
 //separated into a different function to avoid the update function getting too big, uses temp0, could potentially take >1 frame
 inline void floodFillZerosHard(void) {
 
-    one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
-    debugTemp0 = 5;
-
-    fillStackPos = 0;
-    fillStackX[0] = tempTileX;
-    fillStackY[0] = tempTileY;
+    fillStackPos = 1;
+    fillStackX[1] = tempTileX;
+    fillStackY[1] = tempTileY;
 
     temp0 = 0;
-    do {
+    while(fillStackPos > 0) {
 
         cursorX = fillStackX[fillStackPos];
         cursorY = fillStackY[fillStackPos];
@@ -969,7 +966,7 @@ inline void floodFillZerosHard(void) {
         continyue:
 
         --fillStackPos;
-    } while(fillStackPos > 0);
+    }
 
     temp0 = 0;
 }

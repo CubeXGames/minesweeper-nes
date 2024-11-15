@@ -2337,38 +2337,29 @@ L0004:	rts
 .segment	"CODE"
 
 ;
-; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
+; fillStackPos = 1;
 ;
-	lda     #$06
-	jsr     pusha
-	ldx     #$3F
-	lda     #$00
-	jsr     _one_vram_buffer
-;
-; debugTemp0 = 5;
-;
-	lda     #$05
-	sta     _debugTemp0
-;
-; fillStackPos = 0;
-;
-	lda     #$00
+	lda     #$01
 	sta     _fillStackPos
 ;
-; fillStackX[0] = tempTileX;
+; fillStackX[1] = tempTileX;
 ;
 	lda     _tempTileX
-	sta     _fillStackX
+	sta     _fillStackX+1
 ;
-; fillStackY[0] = tempTileY;
+; fillStackY[1] = tempTileY;
 ;
 	lda     _tempTileY
-	sta     _fillStackY
+	sta     _fillStackY+1
 ;
 ; temp0 = 0;
 ;
 	lda     #$00
 	sta     _temp0
+;
+; while(fillStackPos > 0) {
+;
+	jmp     L017C
 ;
 ; cursorX = fillStackX[fillStackPos];
 ;
@@ -2541,7 +2532,7 @@ L012F:	dec     _cursorX
 ; if(temp2 == 0) {
 ;
 	lda     _temp2
-	jne     L017C
+	jne     L017D
 ;
 ; ++fillStackPos;
 ;
@@ -2664,7 +2655,7 @@ L0135:	dec     _cursorX
 ; if(temp2 == 0) {
 ;
 	lda     _temp2
-	jne     L017C
+	jne     L017D
 ;
 ; ++fillStackPos;
 ;
@@ -2853,7 +2844,7 @@ L013F:	dec     _cursorX
 ; if(temp2 == 0) {
 ;
 	lda     _temp2
-	jne     L017C
+	jne     L017D
 ;
 ; ++fillStackPos;
 ;
@@ -2981,7 +2972,7 @@ L0145:	inc     _cursorX
 ; if(temp2 == 0) {
 ;
 	lda     _temp2
-	jne     L017C
+	jne     L017D
 ;
 ; ++fillStackPos;
 ;
@@ -3104,7 +3095,7 @@ L014B:	inc     _cursorX
 ; if(temp2 == 0) {
 ;
 	lda     _temp2
-	jne     L017C
+	jne     L017D
 ;
 ; ++fillStackPos;
 ;
@@ -3293,7 +3284,7 @@ L0155:	inc     _cursorX
 ; if(temp2 == 0) {
 ;
 	lda     _temp2
-	jne     L017C
+	jne     L017D
 ;
 ; ++fillStackPos;
 ;
@@ -3487,7 +3478,7 @@ L015F:	dec     _cursorY
 ; if(temp2 == 0) {
 ;
 	lda     _temp2
-	jne     L017C
+	jne     L017D
 ;
 ; ++fillStackPos;
 ;
@@ -3682,7 +3673,7 @@ L0169:	inc     _cursorY
 ; if(temp2 == 0) {
 ;
 	lda     _temp2
-	jne     L017C
+	jne     L017D
 ;
 ; ++fillStackPos;
 ;
@@ -3990,15 +3981,15 @@ L0179:	inc     _cursorX
 ;
 	lda     _temp2
 	beq     L017B
-L017C:	jsr     _activateTileNoCount
+L017D:	jsr     _activateTileNoCount
 ;
 ; --fillStackPos;
 ;
 L017B:	dec     _fillStackPos
 ;
-; } while(fillStackPos > 0);
+; while(fillStackPos > 0) {
 ;
-	lda     _fillStackPos
+L017C:	lda     _fillStackPos
 	jne     L0002
 ;
 ; temp0 = 0;
