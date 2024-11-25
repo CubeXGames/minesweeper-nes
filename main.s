@@ -32,8 +32,7 @@
 	.export		_tempShort0
 	.export		_global_i
 	.export		_global_j
-	.export		_frameCount
-	.export		_frameCountOverflow
+	.export		_frameSecondCount
 	.export		_rngState
 	.export		_prevController
 	.export		_controller
@@ -43,6 +42,8 @@
 	.export		_tempTileX
 	.export		_tempTileY
 	.export		_numFlags
+	.export		_numSpacesLeft
+	.export		_checkAdjacentTilesFunction
 	.export		_numMinesSetInByte
 	.export		_hardSelectionSprite
 	.export		_boardIsMine
@@ -59,14 +60,18 @@
 	.export		_setTileBaseHard
 	.export		_getTileBaseEasy
 	.export		_setTileBaseEasy
-	.export		_printNumberDebug
 	.export		_printNumber
+	.export		_printTime
+	.export		_pushCursorXY
+	.export		_popCursorXY
+	.export		_checkAdjacentTiles
+	.export		__countMines
 	.export		_countMinesAroundTileHard
 	.export		_generateBoard
 	.export		_activateTile
 	.export		_activateTileNoCount
-	.export		_pushCursorXY
-	.export		_popCursorXY
+	.export		__checkFloodFillPos
+	.export		__checkPos2
 	.export		_hardUpdate
 	.export		_update
 	.export		_main
@@ -132,9 +137,7 @@ _global_i:
 	.res	1,$00
 _global_j:
 	.res	1,$00
-_frameCount:
-	.res	1,$00
-_frameCountOverflow:
+_frameSecondCount:
 	.res	1,$00
 _rngState:
 	.res	2,$00
@@ -154,6 +157,10 @@ _tempTileY:
 	.res	1,$00
 _numFlags:
 	.res	1,$00
+_numSpacesLeft:
+	.res	1,$00
+_checkAdjacentTilesFunction:
+	.res	2,$00
 .segment	"BSS"
 _hardSelectionSprite:
 	.res	4,$00
@@ -164,9 +171,9 @@ _boardIsActivated:
 _boardIsFlag:
 	.res	104,$00
 _fillStackX:
-	.res	40,$00
+	.res	65,$00
 _fillStackY:
-	.res	40,$00
+	.res	65,$00
 _fillStackPos:
 	.res	1,$00
 _debugTemp0:
@@ -886,400 +893,6 @@ L0005:	asl     a
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ printNumberDebug (unsigned short number, unsigned char x, unsigned char y)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_printNumberDebug: near
-
-.segment	"CODE"
-
-;
-; void printNumberDebug(unsigned short number, uchar x, uchar y) {
-;
-	jsr     pusha
-;
-; uchar output = 0;
-;
-	lda     #$00
-	jsr     pusha
-;
-; uchar numberOffset = 0;
-;
-	jsr     pusha
-;
-; uchar firstNumber = FALSE;
-;
-	jsr     pusha
-;
-; while(number >= 10000) {
-;
-	jmp     L0004
-;
-; number -= 10000;
-;
-L0002:	ldx     #$27
-	lda     #$10
-	ldy     #$05
-	jsr     subeqysp
-;
-; ++output;
-;
-	ldy     #$02
-	clc
-	lda     #$01
-	adc     (sp),y
-	sta     (sp),y
-;
-; while(number >= 10000) {
-;
-L0004:	ldy     #$06
-	lda     (sp),y
-	tax
-	dey
-	lda     (sp),y
-	cmp     #$10
-	txa
-	sbc     #$27
-	bcs     L0002
-;
-; one_vram_buffer(output + NUMBER_TO_TILE, NTADR_A(x, y));
-;
-	ldy     #$02
-	lda     (sp),y
-	clc
-	adc     #$30
-	jsr     pusha
-	ldy     #$04
-	ldx     #$00
-	lda     (sp),y
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	iny
-	lda     (sp),y
-	ora     ptr1
-	pha
-	lda     tmp1
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; firstNumber = TRUE;
-;
-	lda     #$01
-	ldy     #$00
-	sta     (sp),y
-;
-; ++numberOffset;
-;
-	iny
-	clc
-	adc     (sp),y
-	sta     (sp),y
-;
-; output = 0;
-;
-	lda     #$00
-	iny
-;
-; while(number >= 1000) {
-;
-	jmp     L0017
-;
-; number -= 1000;
-;
-L0006:	ldx     #$03
-	lda     #$E8
-	ldy     #$05
-	jsr     subeqysp
-;
-; ++output;
-;
-	ldy     #$02
-	clc
-	lda     #$01
-	adc     (sp),y
-L0017:	sta     (sp),y
-;
-; while(number >= 1000) {
-;
-	ldy     #$06
-	lda     (sp),y
-	tax
-	dey
-	lda     (sp),y
-	cmp     #$E8
-	txa
-	sbc     #$03
-	bcs     L0006
-;
-; one_vram_buffer(output + NUMBER_TO_TILE, NTADR_A(x + 1, y));
-;
-	ldy     #$02
-	lda     (sp),y
-	clc
-	adc     #$30
-	jsr     pusha
-	ldy     #$04
-	ldx     #$00
-	lda     (sp),y
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	iny
-	lda     (sp),y
-	clc
-	adc     #$01
-	bcc     L000A
-	inx
-L000A:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; firstNumber = TRUE;
-;
-	lda     #$01
-	ldy     #$00
-	sta     (sp),y
-;
-; ++numberOffset;
-;
-	iny
-	clc
-	adc     (sp),y
-	sta     (sp),y
-;
-; output = 0;
-;
-	lda     #$00
-	iny
-;
-; while(number >= 100) {
-;
-	jmp     L0018
-;
-; number -= 100;
-;
-L001A:	lda     #$64
-	ldy     #$05
-	jsr     subeqysp
-;
-; ++output;
-;
-	ldy     #$02
-	clc
-	lda     #$01
-	adc     (sp),y
-L0018:	sta     (sp),y
-;
-; while(number >= 100) {
-;
-	ldy     #$06
-	lda     (sp),y
-	tax
-	dey
-	lda     (sp),y
-	cmp     #$64
-	txa
-	sbc     #$00
-	ldx     #$00
-	bcs     L001A
-;
-; one_vram_buffer(output + NUMBER_TO_TILE, NTADR_A(x + 2, y));
-;
-	ldy     #$02
-	lda     (sp),y
-	clc
-	adc     #$30
-	jsr     pusha
-	ldy     #$04
-	lda     (sp),y
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	iny
-	lda     (sp),y
-	clc
-	adc     #$02
-	bcc     L000F
-	inx
-L000F:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; firstNumber = TRUE;
-;
-	lda     #$01
-	ldy     #$00
-	sta     (sp),y
-;
-; ++numberOffset;
-;
-	iny
-	clc
-	adc     (sp),y
-	sta     (sp),y
-;
-; output = 0;
-;
-	lda     #$00
-	iny
-;
-; while(number >= 10) {
-;
-	jmp     L0019
-;
-; number -= 10;
-;
-L001B:	lda     #$0A
-	ldy     #$05
-	jsr     subeqysp
-;
-; ++output;
-;
-	ldy     #$02
-	clc
-	lda     #$01
-	adc     (sp),y
-L0019:	sta     (sp),y
-;
-; while(number >= 10) {
-;
-	ldy     #$06
-	lda     (sp),y
-	tax
-	dey
-	lda     (sp),y
-	cmp     #$0A
-	txa
-	sbc     #$00
-	ldx     #$00
-	bcs     L001B
-;
-; one_vram_buffer(output + NUMBER_TO_TILE, NTADR_A(x + 3, y));
-;
-	ldy     #$02
-	lda     (sp),y
-	clc
-	adc     #$30
-	jsr     pusha
-	ldy     #$04
-	lda     (sp),y
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	iny
-	lda     (sp),y
-	clc
-	adc     #$03
-	bcc     L0014
-	inx
-L0014:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; firstNumber = TRUE;
-;
-	lda     #$01
-	ldy     #$00
-	sta     (sp),y
-;
-; ++numberOffset;
-;
-	iny
-	clc
-	adc     (sp),y
-	sta     (sp),y
-;
-; output = 0;
-;
-	lda     #$00
-	iny
-	sta     (sp),y
-;
-; one_vram_buffer(number + NUMBER_TO_TILE, NTADR_A(x + 4, y));
-;
-	ldy     #$05
-	lda     (sp),y
-	clc
-	adc     #$30
-	jsr     pusha
-	ldy     #$04
-	ldx     #$00
-	lda     (sp),y
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	iny
-	lda     (sp),y
-	clc
-	adc     #$04
-	bcc     L0016
-	inx
-L0016:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; }
-;
-	jmp     incsp7
-
-.endproc
-
-; ---------------------------------------------------------------
 ; void __near__ printNumber (unsigned char number, unsigned char x, unsigned char y)
 ; ---------------------------------------------------------------
 
@@ -1519,20 +1132,98 @@ L0014:	ora     ptr1
 .endproc
 
 ; ---------------------------------------------------------------
-; unsigned char __near__ countMinesAroundTileHard (void)
+; void __near__ printTime (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_countMinesAroundTileHard: near
+.proc	_printTime: near
 
 .segment	"CODE"
 
 ;
-; temp2 = 0;
+; }
 ;
-	lda     #$00
-	sta     _temp2
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ pushCursorXY (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_pushCursorXY: near
+
+.segment	"CODE"
+
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; }
+;
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ popCursorXY (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_popCursorXY: near
+
+.segment	"CODE"
+
+;
+; cursorX = fillStackX[fillStackPos];
+;
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	sta     _cursorX
+;
+; cursorY = fillStackY[fillStackPos];
+;
+	ldy     _fillStackPos
+	lda     _fillStackY,y
+	sta     _cursorY
+;
+; --fillStackPos;
+;
+	dec     _fillStackPos
+;
+; }
+;
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ checkAdjacentTiles (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_checkAdjacentTiles: near
+
+.segment	"CODE"
+
 ;
 ; if(cursorX == 0) {
 ;
@@ -1548,23 +1239,21 @@ L0014:	ora     ptr1
 ;
 	inc     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; ++cursorY;
 ;
 	inc     _cursorY
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorX;
 ;
@@ -1572,7 +1261,7 @@ L0014:	ora     ptr1
 ;
 ; } else if(cursorY == (HARD_MAX_Y - 1)) {
 ;
-	jmp     L001D
+	jmp     L001C
 L0013:	lda     _cursorY
 	cmp     #$19
 	bne     L0014
@@ -1581,23 +1270,21 @@ L0013:	lda     _cursorY
 ;
 	inc     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorY;
 ;
 	dec     _cursorY
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorX;
 ;
@@ -1605,51 +1292,47 @@ L0013:	lda     _cursorY
 ;
 ; } else {
 ;
-	jmp     L001D
+	jmp     L001C
 ;
 ; ++cursorY;
 ;
 L0014:	inc     _cursorY
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; ++cursorX;
 ;
 	inc     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
-;
-; --cursorY;
-;
-	dec     _cursorY
-;
-; temp2 += getTileIsMineHard();
-;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorY;
 ;
 	dec     _cursorY
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorX;
 ;
@@ -1657,7 +1340,7 @@ L0014:	inc     _cursorY
 ;
 ; } else if(cursorX == (HARD_MAX_X - 1)) {
 ;
-	jmp     L001D
+	jmp     L001C
 L0015:	lda     _cursorX
 	cmp     #$1F
 	bne     L0018
@@ -1671,12 +1354,11 @@ L0015:	lda     _cursorX
 ;
 	dec     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; ++cursorY;
 ;
@@ -1684,7 +1366,7 @@ L0015:	lda     _cursorX
 ;
 ; } else if(cursorY == (HARD_MAX_Y - 1)) {
 ;
-	jmp     L0022
+	jmp     L0020
 L0016:	lda     _cursorY
 	cmp     #$19
 	bne     L0017
@@ -1693,12 +1375,11 @@ L0016:	lda     _cursorY
 ;
 	dec     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorY;
 ;
@@ -1706,40 +1387,37 @@ L0016:	lda     _cursorY
 ;
 ; } else {
 ;
-	jmp     L0022
+	jmp     L0020
 ;
 ; ++cursorY;
 ;
 L0017:	inc     _cursorY
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorX;
 ;
 	dec     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorY;
 ;
 	dec     _cursorY
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorY;
 ;
@@ -1747,7 +1425,7 @@ L0017:	inc     _cursorY
 ;
 ; } else {
 ;
-	jmp     L0022
+	jmp     L0020
 ;
 ; if(cursorY == 0) {
 ;
@@ -1758,45 +1436,41 @@ L0018:	lda     _cursorY
 ;
 	dec     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; ++cursorY;
 ;
 	inc     _cursorY
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
-;
-; ++cursorX;
-;
-	inc     _cursorX
-;
-; temp2 += getTileIsMineHard();
-;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; ++cursorX;
 ;
 	inc     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorY;
 ;
@@ -1804,7 +1478,7 @@ L0018:	lda     _cursorY
 ;
 ; } else if(cursorY == (HARD_MAX_Y - 1)) {
 ;
-	jmp     L001D
+	jmp     L001C
 L0019:	lda     _cursorY
 	cmp     #$19
 	bne     L001A
@@ -1813,45 +1487,41 @@ L0019:	lda     _cursorY
 ;
 	dec     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorY;
 ;
 	dec     _cursorY
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
-;
-; ++cursorX;
-;
-	inc     _cursorX
-;
-; temp2 += getTileIsMineHard();
-;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; ++cursorX;
 ;
 	inc     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; ++cursorY;
 ;
@@ -1859,67 +1529,101 @@ L0019:	lda     _cursorY
 ;
 ; } else {
 ;
-	jmp     L001D
+	jmp     L001C
 ;
 ; ++cursorX;
 ;
 L001A:	inc     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; ++cursorY;
 ;
 	inc     _cursorY
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
-;
-; --cursorX;
-;
-	dec     _cursorX
-;
-; temp2 += getTileIsMineHard();
-;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorX;
 ;
 	dec     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
-; --cursorY;
+; --cursorX;
 ;
-	dec     _cursorY
+	dec     _cursorX
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTilesFunction();
 ;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
 ;
 ; --cursorY;
 ;
 	dec     _cursorY
 ;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; checkAdjacentTilesFunction();
+;
+L0020:	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; checkAdjacentTilesFunction();
+;
+L001C:	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jmp     callax
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ _countMines (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	__countMines: near
+
+.segment	"CODE"
+
+;
 ; temp2 += getTileIsMineHard();
 ;
 	jsr     _getTileIsMineHard
@@ -1927,27 +1631,38 @@ L001A:	inc     _cursorX
 	adc     _temp2
 	sta     _temp2
 ;
-; ++cursorX;
+; }
 ;
-	inc     _cursorX
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; unsigned char __near__ countMinesAroundTileHard (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_countMinesAroundTileHard: near
+
+.segment	"CODE"
+
 ;
-; temp2 += getTileIsMineHard();
+; temp2 = 0;
 ;
-L0022:	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
+	lda     #$00
 	sta     _temp2
 ;
-; ++cursorX;
+; checkAdjacentTilesFunction = _countMines;
 ;
-	inc     _cursorX
+	lda     #>(__countMines)
+	sta     _checkAdjacentTilesFunction+1
+	lda     #<(__countMines)
+	sta     _checkAdjacentTilesFunction
 ;
-; temp2 += getTileIsMineHard();
+; checkAdjacentTiles();
 ;
-L001D:	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
-	sta     _temp2
+	jsr     _checkAdjacentTiles
 ;
 ; return temp2;
 ;
@@ -1985,14 +1700,19 @@ L001D:	jsr     _getTileIsMineHard
 	and     #$01
 	beq     L0013
 ;
-; temp0 = HARD_NUM_MINES; //250 mines
+; temp0 = HARD_NUM_MINES; //200 mines
 ;
-	lda     #$FA
+	lda     #$C8
 	sta     _temp0
 ;
 ; numFlags = HARD_NUM_MINES;
 ;
 	sta     _numFlags
+;
+; numSpacesLeft = (HARD_MAX_X * HARD_MAX_Y) - HARD_NUM_MINES;
+;
+	lda     #$78
+	sta     _numSpacesLeft
 ;
 ; temp1 = HARD_MAX_Y;
 ;
@@ -2021,6 +1741,11 @@ L0013:	lda     #$46
 ; numFlags = EASY_NUM_MINES;
 ;
 	sta     _numFlags
+;
+; numSpacesLeft = (EASY_MAX_X * EASY_MAX_Y) - EASY_NUM_MINES;
+;
+	lda     #$8A
+	sta     _numSpacesLeft
 ;
 ; temp1 = EASY_MAX_Y;
 ;
@@ -2156,6 +1881,12 @@ L0016:	lda     _gameMode
 .segment	"CODE"
 
 ;
+; if(!getTileIsActivatedHard()) {
+;
+	jsr     _getTileIsActivatedHard
+	tax
+	bne     L0002
+;
 ; setTileIsActivatedHard(TRUE);
 ;
 	lda     #$01
@@ -2175,9 +1906,9 @@ L0016:	lda     _gameMode
 	lda     _tempTileY
 	clc
 	adc     #$03
-	bcc     L0003
+	bcc     L0004
 	inx
-L0003:	jsr     aslax4
+L0004:	jsr     aslax4
 	stx     tmp1
 	asl     a
 	rol     tmp1
@@ -2189,7 +1920,15 @@ L0003:	jsr     aslax4
 	ora     #$20
 	tax
 	pla
-	jmp     _one_vram_buffer
+	jsr     _one_vram_buffer
+;
+; --numSpacesLeft;
+;
+	dec     _numSpacesLeft
+;
+; }
+;
+L0002:	rts
 
 .endproc
 
@@ -2203,6 +1942,12 @@ L0003:	jsr     aslax4
 
 .segment	"CODE"
 
+;
+; if(!getTileIsActivatedHard()) {
+;
+	jsr     _getTileIsActivatedHard
+	tax
+	bne     L0005
 ;
 ; setTileIsActivatedHard(TRUE);
 ;
@@ -2219,9 +1964,9 @@ L0003:	jsr     aslax4
 	lda     _cursorY
 	clc
 	adc     #$03
-	bcc     L0003
+	bcc     L0004
 	inx
-L0003:	jsr     aslax4
+L0004:	jsr     aslax4
 	stx     tmp1
 	asl     a
 	rol     tmp1
@@ -2235,6 +1980,10 @@ L0003:	jsr     aslax4
 	pla
 	jsr     _one_vram_buffer
 ;
+; --numSpacesLeft;
+;
+	dec     _numSpacesLeft
+;
 ; ++temp0;
 ;
 	inc     _temp0
@@ -2242,8 +1991,8 @@ L0003:	jsr     aslax4
 ; if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
 ;
 	lda     _temp0
-	cmp     #$20
-	bcc     L0004
+	cmp     #$40
+	bcc     L0005
 ;
 ; ppu_wait_nmi();
 ;
@@ -2256,36 +2005,67 @@ L0003:	jsr     aslax4
 ;
 ; }
 ;
-L0004:	rts
+L0005:	rts
 
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ pushCursorXY (void)
+; void __near__ _checkFloodFillPos (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_pushCursorXY: near
+.proc	__checkFloodFillPos: near
 
 .segment	"CODE"
 
 ;
-; ++fillStackPos;
+; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
 ;
-	inc     _fillStackPos
+	jsr     _getTileIsMineHard
+	tax
+	bne     L0003
+	jsr     _getTileIsActivatedHard
+	tax
+	beq     L0009
+L0003:	rts
 ;
-; fillStackX[fillStackPos] = cursorX;
+; pushCursorXY();
 ;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
+L0009:	jsr     _pushCursorXY
 ;
-; fillStackY[fillStackPos] = cursorY;
+; temp2 = countMinesAroundTileHard();
 ;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
+	jsr     _countMinesAroundTileHard
+	sta     _temp2
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0006
+;
+; if(fillStackPos < MAX_FLOOD_FILL_UPDATES) pushCursorXY();
+;
+	lda     _fillStackPos
+	cmp     #$40
+	bcs     L0008
+	jsr     _pushCursorXY
+;
+; } else activateTileNoCount();
+;
+	jmp     L0008
+L0006:	jsr     _activateTileNoCount
+;
+; checkAdjacentTilesFunction = _checkFloodFillPos;
+;
+L0008:	lda     #>(__checkFloodFillPos)
+	sta     _checkAdjacentTilesFunction+1
+	lda     #<(__checkFloodFillPos)
+	sta     _checkAdjacentTilesFunction
 ;
 ; }
 ;
@@ -2294,35 +2074,30 @@ L0004:	rts
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ popCursorXY (void)
+; void __near__ _checkPos2 (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_popCursorXY: near
+.proc	__checkPos2: near
 
 .segment	"CODE"
 
 ;
-; cursorX = fillStackX[fillStackPos];
+; if(getTileIsFlagHard()) {
 ;
-	ldy     _fillStackPos
-	lda     _fillStackX,y
-	sta     _cursorX
+	jsr     _getTileIsFlagHard
+	tax
+	beq     L0002
 ;
-; cursorY = fillStackY[fillStackPos];
+; ++temp2;
 ;
-	ldy     _fillStackPos
-	lda     _fillStackY,y
-	sta     _cursorY
+	inc     _temp2
 ;
-; --fillStackPos;
-;
-	dec     _fillStackPos
-;
-; }
+; } else pushCursorXY();
 ;
 	rts
+L0002:	jmp     _pushCursorXY
 
 .endproc
 
@@ -2337,33 +2112,39 @@ L0004:	rts
 .segment	"CODE"
 
 ;
-; fillStackPos = 1;
+; unsigned char currentStackPos = fillStackPos;
 ;
-	lda     #$01
-	sta     _fillStackPos
+	lda     _fillStackPos
+	jsr     pusha
 ;
-; fillStackX[1] = tempTileX;
+; ++fillStackPos;
 ;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = tempTileX;
+;
+	ldy     _fillStackPos
 	lda     _tempTileX
-	sta     _fillStackX+1
+	sta     _fillStackX,y
 ;
-; fillStackY[1] = tempTileY;
+; fillStackY[fillStackPos] = tempTileY;
 ;
+	ldy     _fillStackPos
 	lda     _tempTileY
-	sta     _fillStackY+1
+	sta     _fillStackY,y
 ;
 ; temp0 = 0;
 ;
 	lda     #$00
 	sta     _temp0
 ;
-; while(fillStackPos > 0) {
+; while(fillStackPos != currentStackPos) {
 ;
-	jmp     L017C
+	jmp     L000C
 ;
 ; cursorX = fillStackX[fillStackPos];
 ;
-L0002:	ldy     _fillStackPos
+L0004:	ldy     _fillStackPos
 	lda     _fillStackX,y
 	sta     _cursorX
 ;
@@ -2373,11 +2154,15 @@ L0002:	ldy     _fillStackPos
 	lda     _fillStackY,y
 	sta     _cursorY
 ;
-; if(getTileIsActivatedHard()) goto continyue;
+; --fillStackPos;
+;
+	dec     _fillStackPos
+;
+; if(getTileIsActivatedHard()) continue;
 ;
 	jsr     _getTileIsActivatedHard
 	tax
-	jne     L017B
+	bne     L000C
 ;
 ; setTileIsActivatedHard(TRUE);
 ;
@@ -2392,9 +2177,9 @@ L0002:	ldy     _fillStackPos
 	lda     _cursorY
 	clc
 	adc     #$03
-	bcc     L0009
+	bcc     L000A
 	inx
-L0009:	jsr     aslax4
+L000A:	jsr     aslax4
 	stx     tmp1
 	asl     a
 	rol     tmp1
@@ -2408,6 +2193,10 @@ L0009:	jsr     aslax4
 	pla
 	jsr     _one_vram_buffer
 ;
+; --numSpacesLeft;
+;
+	dec     _numSpacesLeft
+;
 ; ++temp0;
 ;
 	inc     _temp0
@@ -2415,8 +2204,8 @@ L0009:	jsr     aslax4
 ; if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
 ;
 	lda     _temp0
-	cmp     #$20
-	bcc     L012B
+	cmp     #$40
+	bcc     L000B
 ;
 ; ppu_wait_nmi();
 ;
@@ -2427,1583 +2216,31 @@ L0009:	jsr     aslax4
 	lda     #$00
 	sta     _temp0
 ;
-; if(cursorX == 0) {
+; checkAdjacentTilesFunction = _checkFloodFillPos;
 ;
-L012B:	lda     _cursorX
-	jne     L0141
+L000B:	lda     #>(__checkFloodFillPos)
+	sta     _checkAdjacentTilesFunction+1
+	lda     #<(__checkFloodFillPos)
+	sta     _checkAdjacentTilesFunction
 ;
-; if(cursorY == 0) {
+; checkAdjacentTiles();
 ;
-	lda     _cursorY
-	jne     L0131
+	jsr     _checkAdjacentTiles
 ;
-; ++cursorX;
+; while(fillStackPos != currentStackPos) {
 ;
-	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L012D
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L012D
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L0011
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L012D
-L0011:	jsr     _activateTileNoCount
-;
-; ++cursorY;
-;
-L012D:	inc     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L012F
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L012F
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L012F
-	jsr     _activateTileNoCount
-;
-; --cursorX;
-;
-L012F:	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	jne     L017B
-	jsr     _getTileIsActivatedHard
-	tax
-	jne     L017B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	jne     L017D
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L017B
-;
-; } else if(cursorY == (HARD_MAX_Y - 1)) {
-;
-L0131:	lda     _cursorY
-	cmp     #$19
-	jne     L0137
-;
-; ++cursorX;
-;
-	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0133
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0133
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L0028
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0133
-L0028:	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L0133:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0135
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0135
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L0135
-	jsr     _activateTileNoCount
-;
-; --cursorX;
-;
-L0135:	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	jne     L017B
-	jsr     _getTileIsActivatedHard
-	tax
-	jne     L017B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	jne     L017D
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L017B
-;
-; ++cursorY;
-;
-L0137:	inc     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0139
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0139
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L003E
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0139
-L003E:	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L0139:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L013B
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L013B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L013B
-	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L013B:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L013D
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L013D
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L004B
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L013D
-L004B:	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L013D:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L013F
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L013F
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L013F
-	jsr     _activateTileNoCount
-;
-; --cursorX;
-;
-L013F:	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	jne     L017B
-	jsr     _getTileIsActivatedHard
-	tax
-	jne     L017B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	jne     L017D
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L017B
-;
-; } else if(cursorX == (HARD_MAX_X - 1)) {
-;
-L0141:	lda     _cursorX
-	cmp     #$1F
-	jne     L0157
-;
-; if(cursorY == 0) {
-;
-	lda     _cursorY
-	jne     L0147
-;
-; --cursorX;
-;
-	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0143
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0143
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L0063
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0143
-L0063:	jsr     _activateTileNoCount
-;
-; ++cursorY;
-;
-L0143:	inc     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0145
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0145
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L0145
-	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L0145:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	jne     L017B
-	jsr     _getTileIsActivatedHard
-	tax
-	jne     L017B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	jne     L017D
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L017B
-;
-; } else if(cursorY == (HARD_MAX_Y - 1)) {
-;
-L0147:	lda     _cursorY
-	cmp     #$19
-	jne     L014D
-;
-; --cursorX;
-;
-	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0149
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0149
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L007A
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0149
-L007A:	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L0149:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L014B
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L014B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L014B
-	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L014B:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	jne     L017B
-	jsr     _getTileIsActivatedHard
-	tax
-	jne     L017B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	jne     L017D
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L017B
-;
-; ++cursorY;
-;
-L014D:	inc     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L014F
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L014F
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L0090
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L014F
-L0090:	jsr     _activateTileNoCount
-;
-; --cursorX;
-;
-L014F:	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0151
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0151
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L0151
-	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L0151:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0153
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0153
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L009D
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0153
-L009D:	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L0153:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0155
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0155
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L0155
-	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L0155:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	jne     L017B
-	jsr     _getTileIsActivatedHard
-	tax
-	jne     L017B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	jne     L017D
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L017B
-;
-; if(cursorY == 0) {
-;
-L0157:	lda     _cursorY
-	jne     L0161
-;
-; --cursorX;
-;
-	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0159
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0159
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L00B4
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0159
-L00B4:	jsr     _activateTileNoCount
-;
-; ++cursorY;
-;
-L0159:	inc     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L015B
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L015B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L015B
-	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L015B:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L015D
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L015D
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L00C1
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L015D
-L00C1:	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L015D:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L015F
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L015F
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L015F
-	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L015F:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	jne     L017B
-	jsr     _getTileIsActivatedHard
-	tax
-	jne     L017B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	jne     L017D
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L017B
-;
-; } else if(cursorY == (HARD_MAX_Y - 1)) {
-;
-L0161:	lda     _cursorY
-	cmp     #$19
-	jne     L016B
-;
-; --cursorX;
-;
-	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0163
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0163
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L00D8
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0163
-L00D8:	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L0163:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0165
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0165
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L0165
-	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L0165:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0167
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0167
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L00E5
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0167
-L00E5:	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L0167:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0169
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0169
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L0169
-	jsr     _activateTileNoCount
-;
-; ++cursorY;
-;
-L0169:	inc     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	jne     L017B
-	jsr     _getTileIsActivatedHard
-	tax
-	jne     L017B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	jne     L017D
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L017B
-;
-; ++cursorX;
-;
-L016B:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L016D
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L016D
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L00FB
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L016D
-L00FB:	jsr     _activateTileNoCount
-;
-; ++cursorY;
-;
-L016D:	inc     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L016F
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L016F
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L016F
-	jsr     _activateTileNoCount
-;
-; --cursorX;
-;
-L016F:	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0171
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0171
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L0108
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0171
-L0108:	jsr     _activateTileNoCount
-;
-; --cursorX;
-;
-L0171:	dec     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0173
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0173
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L0173
-	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L0173:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0175
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0175
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L0115
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0175
-L0115:	jsr     _activateTileNoCount
-;
-; --cursorY;
-;
-L0175:	dec     _cursorY
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0177
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0177
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L0177
-	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L0177:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L0179
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0179
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) {
-;
-	lda     _temp2
-	bne     L0122
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = cursorX;
-;
-	ldy     _fillStackPos
-	lda     _cursorX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = cursorY;
-;
-	ldy     _fillStackPos
-	lda     _cursorY
-	sta     _fillStackY,y
-;
-; } else activateTileNoCount();
-;
-	jmp     L0179
-L0122:	jsr     _activateTileNoCount
-;
-; ++cursorX;
-;
-L0179:	inc     _cursorX
-;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsMineHard
-	tax
-	bne     L017B
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L017B
-;
-; pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-;
-	jsr     _pushCursorXY
-	jsr     _countMinesAroundTileHard
-	sta     _temp2
-	jsr     _popCursorXY
-;
-; if(temp2 != 0) activateTileNoCount();
-;
-	lda     _temp2
-	beq     L017B
-L017D:	jsr     _activateTileNoCount
-;
-; --fillStackPos;
-;
-L017B:	dec     _fillStackPos
-;
-; while(fillStackPos > 0) {
-;
-L017C:	lda     _fillStackPos
-	jne     L0002
+L000C:	lda     _fillStackPos
+	ldy     #$00
+	cmp     (sp),y
+	bne     L0004
 ;
 ; temp0 = 0;
 ;
-	sta     _temp0
+	sty     _temp0
 ;
 ; }
 ;
-	rts
-
-.segment	"RODATA"
-
-M0001:
-	.word	$0000
+	jmp     incsp1
 
 .endproc
 
@@ -4018,10 +2255,15 @@ M0001:
 .segment	"CODE"
 
 ;
+; temp0 = 0;
+;
+	lda     #$00
+	sta     _temp0
+;
 ; if(debugTemp0) {
 ;
 	lda     _debugTemp0
-	beq     L0030
+	beq     L0046
 ;
 ; --debugTemp0;
 ;
@@ -4036,22 +2278,22 @@ M0001:
 	lda     #$00
 	jsr     _one_vram_buffer
 ;
-; __asm__("lda #$00");
+; __asm__("lda #%b", FALSE);
 ;
 L0003:	lda     #$00
 ;
 ; __asm__("sta %v", temp1);
 ;
-L0030:	sta     _temp1
+L0046:	sta     _temp1
 ;
 ; if(BUTTON_DOWN(PAD_RIGHT)) {
 ;
 	lda     _controller
 	and     #$01
-	beq     L0034
+	beq     L004A
 	lda     _prevController
 	and     #$01
-	bne     L0034
+	bne     L004A
 ;
 ; __asm__("ldx %v", cursorX);
 ;
@@ -4088,12 +2330,12 @@ L0030:	sta     _temp1
 ;
 ; if(BUTTON_DOWN(PAD_LEFT)) {
 ;
-L0034:	lda     _controller
+L004A:	lda     _controller
 	and     #$02
-	beq     L0038
+	beq     L004E
 	lda     _prevController
 	and     #$02
-	bne     L0038
+	bne     L004E
 ;
 ; __asm__("ldx %v", cursorX);
 ;
@@ -4126,12 +2368,12 @@ L0034:	lda     _controller
 ;
 ; if(BUTTON_DOWN(PAD_DOWN)) {
 ;
-L0038:	lda     _controller
+L004E:	lda     _controller
 	and     #$04
-	beq     L003C
+	beq     L0052
 	lda     _prevController
 	and     #$04
-	bne     L003C
+	bne     L0052
 ;
 ; __asm__("ldx %v", cursorY);
 ;
@@ -4168,7 +2410,7 @@ L0038:	lda     _controller
 ;
 ; if(BUTTON_DOWN(PAD_UP)) {
 ;
-L003C:	lda     _controller
+L0052:	lda     _controller
 	and     #$08
 	beq     L0010
 	lda     _prevController
@@ -4250,45 +2492,45 @@ L0014:	lda     _cursorX
 	adc     #$17
 	sta     _hardSelectionSprite
 ;
-; if((frameCount & 0b11111) == 0) {
+; if((frameSecondCount & 0b11111) == 0) {
 ;
-	lda     _frameCount
+	lda     _frameSecondCount
 	and     #$1F
-	bne     L0041
+	bne     L0057
 ;
-; if((frameCount & 0b111111) == 0) one_vram_buffer(WHITE, PALETTE_MEMORY_BEGIN + 0x11);
+; if((frameSecondCount & 0b111111) == 0) one_vram_buffer(WHITE, PALETTE_MEMORY_BEGIN + 0x11);
 ;
-	lda     _frameCount
+	lda     _frameSecondCount
 	and     #$3F
-	bne     L0040
+	bne     L0056
 	lda     #$30
 ;
 ; else one_vram_buffer(0x38, PALETTE_MEMORY_BEGIN + 0x11);
 ;
-	jmp     L0050
-L0040:	lda     #$38
-L0050:	jsr     pusha
+	jmp     L006A
+L0056:	lda     #$38
+L006A:	jsr     pusha
 	ldx     #$3F
 	lda     #$11
 	jsr     _one_vram_buffer
 ;
 ; if(BUTTON_DOWN(PAD_B) && !getTileIsActivatedHard()) {
 ;
-L0041:	lda     _controller
+L0057:	lda     _controller
 	and     #$40
-	jeq     L0046
+	jeq     L005C
 	lda     _prevController
 	and     #$40
-	jne     L0046
+	jne     L005C
 	jsr     _getTileIsActivatedHard
 	tax
-	jne     L0046
+	jne     L005C
 ;
 ; if(getTileIsFlagHard()) {
 ;
 	jsr     _getTileIsFlagHard
 	tax
-	beq     L0045
+	beq     L005B
 ;
 ; ++numFlags;
 ;
@@ -4313,8 +2555,8 @@ L0041:	lda     _controller
 ;
 ; } else if(numFlags > 0) {
 ;
-	jmp     L0060
-L0045:	lda     _numFlags
+	jmp     L007A
+L005B:	lda     _numFlags
 	beq     L0023
 ;
 ; --numFlags;
@@ -4337,7 +2579,7 @@ L0045:	lda     _numFlags
 	asl     a
 	clc
 	adc     #$09
-L0060:	jsr     pusha
+L007A:	jsr     pusha
 	ldx     #$00
 	lda     _cursorY
 	clc
@@ -4372,7 +2614,7 @@ L0023:	jsr     decsp2
 ;
 ; tempTileX = cursorX;
 ;
-L0046:	lda     _cursorX
+L005C:	lda     _cursorX
 	sta     _tempTileX
 ;
 ; tempTileY = cursorY;
@@ -4380,26 +2622,29 @@ L0046:	lda     _cursorX
 	lda     _cursorY
 	sta     _tempTileY
 ;
-; if(BUTTON_DOWN(PAD_A) && !getTileIsFlagHard() && !getTileIsActivatedHard()) {
+; if(!getTileIsFlagHard() && !getTileIsActivatedHard()) {
+;
+	jsr     _getTileIsFlagHard
+	tax
+	bne     L0062
+	jsr     _getTileIsActivatedHard
+	tax
+	bne     L0062
+;
+; if(BUTTON_DOWN(PAD_A)) {
 ;
 	lda     _controller
 	and     #$80
-	beq     L0026
+	beq     L0061
 	lda     _prevController
 	and     #$80
-	bne     L0026
-	jsr     _getTileIsFlagHard
-	tax
-	bne     L0026
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0026
+	bne     L0061
 ;
 ; if(getTileIsMineHard()) {
 ;
 	jsr     _getTileIsMineHard
 	tax
-	beq     L002A
+	beq     L002E
 ;
 ; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
 ;
@@ -4416,25 +2661,34 @@ L0046:	lda     _cursorX
 ;
 ; } else {
 ;
-	jmp     L004B
+	jmp     L0061
+;
+; pushCursorXY();
+;
+L002E:	jsr     _pushCursorXY
 ;
 ; countMinesAroundTileHard();
 ;
-L002A:	jsr     _countMinesAroundTileHard
+	jsr     _countMinesAroundTileHard
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
 ;
 ; if(temp2 == 0) floodFillZerosHard(); //enjoy
 ;
 	lda     _temp2
-	bne     L004A
+	bne     L0030
 	jsr     _floodFillZerosHard
 ;
-; else {
+; else activateTileNoCount();
 ;
-	jmp     L004B
+	jmp     L0061
+L0030:	jsr     _activateTileNoCount
 ;
 ; cursorX = tempTileX;
 ;
-L004A:	lda     _tempTileX
+L0061:	lda     _tempTileX
 	sta     _cursorX
 ;
 ; cursorY = tempTileY;
@@ -4442,13 +2696,178 @@ L004A:	lda     _tempTileX
 	lda     _tempTileY
 	sta     _cursorY
 ;
-; activateTileNoCount();
+; if(BUTTON_DOWN(PAD_SELECT) && getTileIsActivatedHard()) {
 ;
-	jsr     _activateTileNoCount
+L0062:	lda     _controller
+	and     #$20
+	jeq     L0032
+	lda     _prevController
+	and     #$20
+	jne     L0032
+	jsr     _getTileIsActivatedHard
+	tax
+	jeq     L0032
+;
+; pushCursorXY();
+;
+	jsr     _pushCursorXY
+;
+; temp2 = countMinesAroundTileHard();
+;
+	jsr     _countMinesAroundTileHard
+	sta     _temp2
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
+;
+; temp1 = temp2;
+;
+	lda     _temp2
+	sta     _temp1
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = 0xFF; //end of list of non-mine tiles
+;
+	ldy     _fillStackPos
+	lda     #$FF
+	sta     _fillStackX,y
+;
+; temp2 = 0;
+;
+	lda     #$00
+	sta     _temp2
+;
+; checkAdjacentTilesFunction = _checkPos2;
+;
+	lda     #>(__checkPos2)
+	sta     _checkAdjacentTilesFunction+1
+	lda     #<(__checkPos2)
+	sta     _checkAdjacentTilesFunction
+;
+; checkAdjacentTiles();
+;
+	jsr     _checkAdjacentTiles
+;
+; if(temp2 == temp1) {
+;
+	lda     _temp2
+	cmp     _temp1
+	bne     L0065
+;
+; while(fillStackX[fillStackPos] != 0xFF) {
+;
+	jmp     L003D
+;
+; popCursorXY();
+;
+L0038:	jsr     _popCursorXY
+;
+; if(getTileIsMineHard()) {
+;
+	jsr     _getTileIsMineHard
+	tax
+	beq     L003C
+;
+; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove, make screen be destroyed)
+;
+	lda     #$06
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
+; debugTemp0 = 5;
+;
+	lda     #$05
+	sta     _debugTemp0
+;
+; } else {
+;
+	jmp     L003D
+;
+; pushCursorXY();
+;
+L003C:	jsr     _pushCursorXY
+;
+; countMinesAroundTileHard();
+;
+	jsr     _countMinesAroundTileHard
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = tempTileX;
+;
+	ldy     _fillStackPos
+	lda     _tempTileX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = tempTileY;
+;
+	ldy     _fillStackPos
+	lda     _tempTileY
+	sta     _fillStackY,y
+;
+; tempTileX = cursorX;
+;
+	lda     _cursorX
+	sta     _tempTileX
+;
+; tempTileY = cursorY;
+;
+	lda     _cursorY
+	sta     _tempTileY
+;
+; if(temp2 == 0) floodFillZerosHard();
+;
+	lda     _temp2
+	bne     L0040
+	jsr     _floodFillZerosHard
+;
+; else activateTileNoCount();
+;
+	jmp     L0041
+L0040:	jsr     _activateTileNoCount
+;
+; tempTileX = fillStackX[fillStackPos];
+;
+L0041:	ldy     _fillStackPos
+	lda     _fillStackX,y
+	sta     _tempTileX
+;
+; tempTileY = fillStackY[fillStackPos];
+;
+	ldy     _fillStackPos
+	lda     _fillStackY,y
+	sta     _tempTileY
+;
+; --fillStackPos;
+;
+	dec     _fillStackPos
+;
+; while(fillStackX[fillStackPos] != 0xFF) {
+;
+L003D:	ldy     _fillStackPos
+	lda     _fillStackX,y
+	cmp     #$FF
+	bne     L0038
+;
+; --fillStackPos;
+;
+	dec     _fillStackPos
 ;
 ; cursorX = tempTileX;
 ;
-L004B:	lda     _tempTileX
+L0065:	lda     _tempTileX
 	sta     _cursorX
 ;
 ; cursorY = tempTileY;
@@ -4458,7 +2877,7 @@ L004B:	lda     _tempTileX
 ;
 ; oam_clear();
 ;
-L0026:	jsr     _oam_clear
+L0032:	jsr     _oam_clear
 ;
 ; oam_spr(hardSelectionSprite.xPos, hardSelectionSprite.yPos, hardSelectionSprite.tile, hardSelectionSprite.attributes);
 ;
@@ -4507,10 +2926,10 @@ L0026:	jsr     _oam_clear
 	lda     #$E3
 	sta     _rngState+1
 ;
-; frameCount = 0;
+; frameSecondCount = 0;
 ;
 	lda     #$00
-	sta     _frameCount
+	sta     _frameSecondCount
 ;
 ; hardSelectionSprite.tile = 0x00;
 ;
@@ -4549,27 +2968,9 @@ L0026:	jsr     _oam_clear
 ;
 	jsr     _hardUpdate
 ;
-; __asm__("inc %v", frameCount);
+; __asm__("inc %v", frameSecondCount);
 ;
-	inc     _frameCount
-;
-; __asm__("bne @frameCountNoOverflow"); //aka zero flag is set aka overflow happened
-;
-	bne     @frameCountNoOverflow
-;
-; frameCountOverflow = TRUE;
-;
-	lda     #$01
-;
-; return;
-;
-	jmp     L0002
-;
-; frameCountOverflow = FALSE;
-;
-@frameCountNoOverflow:
-	lda     #$00
-L0002:	sta     _frameCountOverflow
+	inc     _frameSecondCount
 ;
 ; }
 ;
@@ -4650,23 +3051,6 @@ L0010:	lda     _global_j
 	asl     a
 	clc
 	adc     #$08
-	sta     _temp2
-;
-; cursorX = global_i;
-;
-	lda     _global_i
-	sta     _cursorX
-;
-; cursorY = global_j;
-;
-	lda     _global_j
-	sta     _cursorY
-;
-; temp2 += getTileIsMineHard(); //1 = mine, 0 = no mine
-;
-	jsr     _getTileIsMineHard
-	clc
-	adc     _temp2
 	sta     _temp2
 ;
 ; vram_adr(NTADR_A(global_i, global_j + 3));

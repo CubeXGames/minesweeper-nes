@@ -32,7 +32,7 @@ typedef union {
 
 #define HARD_MAX_X 32
 #define HARD_MAX_Y 26
-#define HARD_NUM_MINES 250
+#define HARD_NUM_MINES 200
 
 #define EASY_MAX_X 16
 #define EASY_MAX_Y 13
@@ -45,10 +45,18 @@ typedef union {
 #define NUMBER_TO_TILE 0x30
 #define NUMBER_TO_NUMBER_TILE 0x10
 
-#define FILL_STACK_SIZE 0x28
-//has no effect on the function, only on the amount of reserved memory
-#define MAX_FLOOD_FILL_UPDATES 0x20
+#define FILL_STACK_SIZE 0x41
+#define MAX_FLOOD_FILL_UPDATES 0x40
 
 #define PALETTE_MEMORY_BEGIN 0x3f00
+
+//commence visual studio code appeasement
+#ifndef __CC65__
+
+uchar __A__;
+#define __asm__()
+
+#endif
+//conclude visual studio code appeasement
 
 #endif

@@ -25,9 +25,9 @@ void main(void) {
         for(global_j = 0; global_j < HARD_MAX_Y; ++global_j) {
             
             temp2 = 0x8 + (((global_i & 0b1) ^ (global_j & 0b1)) << 1); //tile num, alternates as a checkerboard
-            cursorX = global_i;
-            cursorY = global_j;
-            temp2 += getTileIsMineHard(); //1 = mine, 0 = no mine
+            //cursorX = global_i;
+            //cursorY = global_j;
+            //temp2 += getTileIsMineHard(); //1 = mine, 0 = no mine
             vram_adr(NTADR_A(global_i, global_j + 3));
             vram_put(temp2);
         }

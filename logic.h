@@ -22,7 +22,6 @@ unsigned short tempShort0;
 uchar global_i;
 uchar global_j;
 uchar frameCount;
-uchar frameCountOverflow;
 
 //uchar boardWidth;
 
@@ -39,6 +38,9 @@ uchar cursorY;
 uchar tempTileX, tempTileY;
 
 uchar numFlags;
+uchar numSpacesLeft;
+
+void (*checkAdjacentTilesFunction)(void);
 
 #pragma bss-name(pop)
 
@@ -49,6 +51,7 @@ uchar boardIsMine[BOARD_MEM_SIZE];
 uchar boardIsActivated[BOARD_MEM_SIZE];
 uchar boardIsFlag[BOARD_MEM_SIZE];
 
+//also used for some miscellaneous things (like tile counting)
 uchar fillStackX[FILL_STACK_SIZE];
 uchar fillStackY[FILL_STACK_SIZE];
 uchar fillStackPos;
@@ -198,73 +201,7 @@ inline void setTileIsFlagEasy(uchar value) {
 
 #pragma endregion
 
-//todo fix number length bug
-void printNumberDebug(unsigned short number, uchar x, uchar y) {
-
-    uchar output = 0;
-    uchar numberOffset = 0;
-    uchar firstNumber = FALSE;
-
-    //if(number >= 10000) {
-
-        while(number >= 10000) {
-
-            number -= 10000;
-            ++output;
-        }
-
-        one_vram_buffer(output + NUMBER_TO_TILE, NTADR_A(x, y));
-        firstNumber = TRUE;
-        ++numberOffset;
-        output = 0;
-    //}
-    
-    //if(number >= 1000) {
-
-        while(number >= 1000) {
-
-            number -= 1000;
-            ++output;
-        }
-
-        one_vram_buffer(output + NUMBER_TO_TILE, NTADR_A(x + 1, y));
-        firstNumber = TRUE;
-        ++numberOffset;
-        output = 0;
-    //} else if(firstNumber) ++numberOffset;
-
-    //if(number >= 100) {
-
-        while(number >= 100) {
-
-            number -= 100;
-            ++output;
-        }
-
-        one_vram_buffer(output + NUMBER_TO_TILE, NTADR_A(x + 2, y));
-        firstNumber = TRUE;
-        ++numberOffset;
-        output = 0;
-    //} else if(firstNumber) ++numberOffset;
-
-    //if(number >= 10) {
-
-        while(number >= 10) {
-
-            number -= 10;
-            ++output;
-        }
-
-        one_vram_buffer(output + NUMBER_TO_TILE, NTADR_A(x + 3, y));
-        firstNumber = TRUE;
-        ++numberOffset;
-        output = 0;
-    //} else if(firstNumber) ++numberOffset;
-    
-    one_vram_buffer(number + NUMBER_TO_TILE, NTADR_A(x + 4, y));
-}
-
-//relatively slow, clobbers 3 tiles regardless of whatever they are, uses temp2 = number in place value
+//relatively slow, uses x - x + 3 tiles regardless of whatever they are, uses temp2 = number in place value
 void printNumber(uchar number, uchar x, uchar y) {
 
     uchar offset = 0; //also for if the number's begun in bit 7 (save a stack variable)
@@ -306,118 +243,152 @@ void printNumber(uchar number, uchar x, uchar y) {
     }
 }
 
-//uses temp2, cursorX, cursorY, doesn't check if space is already a mine, todo make more efficient? dunno what else i could do
-uchar countMinesAroundTileHard(void) {
+void printTime(void) {
 
-    temp2 = 0;
+
+}
+
+void pushCursorXY(void) {
+
+    ++fillStackPos;
+
+    fillStackX[fillStackPos] = cursorX;
+    fillStackY[fillStackPos] = cursorY;
+}
+
+void popCursorXY(void) {
+
+    cursorX = fillStackX[fillStackPos];
+    cursorY = fillStackY[fillStackPos];
+
+    --fillStackPos;
+}
+
+//uses checkAdjacentTilesFunction, make sure to set it or else
+void checkAdjacentTiles(void) {
+
     if(cursorX == 0) {
 
         if(cursorY == 0) {
             
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
         } else if(cursorY == (HARD_MAX_Y - 1)) {
 
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
         } else {
 
             ++cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
         }
     } else if(cursorX == (HARD_MAX_X - 1)) {
 
         if(cursorY == 0) {
 
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
         } else if(cursorY == (HARD_MAX_Y - 1)) {
 
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
         } else {
 
             ++cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
         }
     } else {
 
         if(cursorY == 0) {
 
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
         } else if(cursorY == (HARD_MAX_Y - 1)) {
 
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
         } else {
 
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             --cursorY;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
             ++cursorX;
-            temp2 += getTileIsMineHard();
+            checkAdjacentTilesFunction();
         }
     }
+}
+
+void _countMines(void) {
+
+    temp2 += getTileIsMineHard();
+}
+
+//uses temp2, cursorX, cursorY, doesn't check if space is already a mine, todo make more efficient? dunno what else i could do
+uchar countMinesAroundTileHard(void) {
+
+    temp2 = 0;
+
+    checkAdjacentTilesFunction = _countMines;
+    checkAdjacentTiles();
 
     return temp2;
 }
@@ -436,8 +407,9 @@ void generateBoard(void) {
 
     if((gameMode >> 3) & 0b1) { //is the game in hard mode?
 
-        temp0 = HARD_NUM_MINES; //250 mines
+        temp0 = HARD_NUM_MINES; //200 mines
         numFlags = HARD_NUM_MINES;
+        numSpacesLeft = (HARD_MAX_X * HARD_MAX_Y) - HARD_NUM_MINES;
         //boardWidth = HARD_MAX_X;
         temp1 = HARD_MAX_Y;
         temp2 = BOARD_MEM_SIZE;
@@ -446,6 +418,7 @@ void generateBoard(void) {
 
         temp0 = EASY_NUM_MINES; //85 mines
         numFlags = EASY_NUM_MINES;
+        numSpacesLeft = (EASY_MAX_X * EASY_MAX_Y) - EASY_NUM_MINES;
         //boardWidth = EASY_MAX_X;
         temp1 = EASY_MAX_Y;
         temp2 = EASY_BOARD_USED_MEM_SIZE;
@@ -484,57 +457,83 @@ void generateBoard(void) {
 //returns the number of mines around it in temp2, uses temp2
 void activateTile(void) {
 
-    setTileIsActivatedHard(TRUE);
+    if(!getTileIsActivatedHard()) {
 
-    countMinesAroundTileHard();
-    one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(tempTileX, tempTileY + 3));
+        setTileIsActivatedHard(TRUE);
+
+        countMinesAroundTileHard();
+        one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(tempTileX, tempTileY + 3));
+
+        --numSpacesLeft;
+    }
 }
 
 //checks temp0, waits a frame if too many updates
 void activateTileNoCount(void) {
 
-    setTileIsActivatedHard(TRUE);
-    one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 3));
+    if(!getTileIsActivatedHard()) {
 
-    ++temp0;
-    if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
+        setTileIsActivatedHard(TRUE);
+        one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 3));
 
-        ppu_wait_nmi();
-        temp0 = 0;
+        --numSpacesLeft;
+
+        ++temp0;
+        if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
+
+            ppu_wait_nmi();
+            temp0 = 0;
+        }
     }
 }
 
-void pushCursorXY(void) {
+void _checkFloodFillPos(void) {
 
-    ++fillStackPos;
-    fillStackX[fillStackPos] = cursorX;
-    fillStackY[fillStackPos] = cursorY;
+    if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
+
+        pushCursorXY();
+        temp2 = countMinesAroundTileHard();
+        popCursorXY();
+        if(temp2 == 0) {
+
+            if(fillStackPos < MAX_FLOOD_FILL_UPDATES) pushCursorXY();
+        } else activateTileNoCount();
+
+        checkAdjacentTilesFunction = _checkFloodFillPos; //checkAdjacentTilesFunction got changed by countMinesAroundTile so change it back
+    }
 }
 
-void popCursorXY(void) {
+void _checkPos2(void) {
 
-    cursorX = fillStackX[fillStackPos];
-    cursorY = fillStackY[fillStackPos];
-    --fillStackPos;
+    if(getTileIsFlagHard()) {
+
+        ++temp2;
+    } else pushCursorXY();
 }
 
 //separated into a different function to avoid the update function getting too big, uses temp0, could potentially take >1 frame
 inline void floodFillZerosHard(void) {
 
-    fillStackPos = 1;
-    fillStackX[1] = tempTileX;
-    fillStackY[1] = tempTileY;
+    unsigned char currentStackPos = fillStackPos;
+
+    ++fillStackPos;
+    fillStackX[fillStackPos] = tempTileX;
+    fillStackY[fillStackPos] = tempTileY;
 
     temp0 = 0;
-    while(fillStackPos > 0) {
+    while(fillStackPos != currentStackPos) {
 
         cursorX = fillStackX[fillStackPos];
         cursorY = fillStackY[fillStackPos];
 
-        if(getTileIsActivatedHard()) goto continyue;
+        --fillStackPos;
+
+        if(getTileIsActivatedHard()) continue;
 
         setTileIsActivatedHard(TRUE);
         one_vram_buffer(NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 3));
+
+        --numSpacesLeft;
 
         ++temp0;
         if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
@@ -543,429 +542,8 @@ inline void floodFillZerosHard(void) {
             temp0 = 0;
         }
 
-        if(cursorX == 0) {
-
-            if(cursorY == 0) {
-                
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                ++cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                    
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                    
-                pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-            } else if(cursorY == (HARD_MAX_Y - 1)) {
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-                
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-            } else {
-
-                ++cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-                
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-                
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-            }
-        } else if(cursorX == (HARD_MAX_X - 1)) {
-
-            if(cursorY == 0) {
-
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                ++cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-            } else if(cursorY == (HARD_MAX_Y - 1)) {
-
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-            } else {
-
-                ++cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-            }
-        } else {
-
-            if(cursorY == 0) {
-
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                ++cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-            } else if(cursorY == (HARD_MAX_Y - 1)) {
-
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-                
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                ++cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                    
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-            } else {
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-                
-                ++cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                --cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                --cursorY;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 == 0) {
-
-                        ++fillStackPos;
-                        fillStackX[fillStackPos] = cursorX;
-                        fillStackY[fillStackPos] = cursorY;
-                    } else activateTileNoCount();
-                }
-
-                ++cursorX;
-                if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
-                        
-                    pushCursorXY();                     temp2 = countMinesAroundTileHard();                     popCursorXY();
-                    if(temp2 != 0) activateTileNoCount();
-                }
-            }
-        }
-    
-        continyue:
-
-        --fillStackPos;
+        checkAdjacentTilesFunction = _checkFloodFillPos;
+        checkAdjacentTiles();
     }
 
     temp0 = 0;
@@ -973,6 +551,8 @@ inline void floodFillZerosHard(void) {
 
 //uses temp0
 void hardUpdate(void) {
+
+    temp0 = 0;
 
     //update cursor x and y, wrap around the screen as needed
 
@@ -985,7 +565,7 @@ void hardUpdate(void) {
     //BEGIN using temp1 = is button pressed
     //used assembly for the bpl instruction, the compiler might not generate it if I compared the number to 255 or something like that
 
-    __asm__("lda #$00");
+    __asm__("lda #%b", FALSE);
     __asm__("sta %v", temp1);
 
     if(BUTTON_DOWN(PAD_RIGHT)) {
@@ -1076,31 +656,91 @@ void hardUpdate(void) {
     }
 
     //END using temp2
-    //BEGIN using temp2: mines around tile
     //BEGIN using temp0: number of flood-fill sprite updates this frame
+    //BEGIN using temp1: saved mined around tile while temp2 is used for other things
+    //BEGIN using temp2: mines around tile
     
     //cursor x and y are about to be clobbered so preserve them here
     tempTileX = cursorX;
     tempTileY = cursorY;
 
-    //activating mines
-    if(BUTTON_DOWN(PAD_A) && !getTileIsFlagHard() && !getTileIsActivatedHard()) {
+    //activating tiles
+    if(!getTileIsFlagHard() && !getTileIsActivatedHard()) {
 
-        if(getTileIsMineHard()) {
+        if(BUTTON_DOWN(PAD_A)) {
 
-            //oof
-            one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
-            debugTemp0 = 5;
-        } else {
+            if(getTileIsMineHard()) {
 
-            countMinesAroundTileHard();
-            if(temp2 == 0) floodFillZerosHard(); //enjoy
-            else {
+                //oof
+                one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
+                debugTemp0 = 5;
+            } else {
 
-                cursorX = tempTileX;
-                cursorY = tempTileY;
-                activateTileNoCount();
+                pushCursorXY();
+                countMinesAroundTileHard();
+                popCursorXY();
+
+                if(temp2 == 0) floodFillZerosHard(); //enjoy
+                else activateTileNoCount();
             }
+        }
+
+        //unclobber cursor x and y
+        cursorX = tempTileX;
+        cursorY = tempTileY;
+    }
+
+    if(BUTTON_DOWN(PAD_SELECT) && getTileIsActivatedHard()) {
+
+        pushCursorXY();
+        temp2 = countMinesAroundTileHard();
+        popCursorXY();
+
+        //save num mines around tile
+        temp1 = temp2;
+
+        ++fillStackPos;
+        fillStackX[fillStackPos] = 0xFF; //end of list of non-mine tiles
+
+        //get num flags around tile
+        temp2 = 0;
+        checkAdjacentTilesFunction = _checkPos2;
+        checkAdjacentTiles();
+
+        if(temp2 == temp1) {
+
+            while(fillStackX[fillStackPos] != 0xFF) {
+
+                popCursorXY();
+
+                if(getTileIsMineHard()) {
+
+                    //oof
+                    one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove, make screen be destroyed)
+                    debugTemp0 = 5;
+                } else {
+
+                    pushCursorXY();
+                    countMinesAroundTileHard();
+                    popCursorXY();
+
+                    ++fillStackPos;
+                    fillStackX[fillStackPos] = tempTileX;
+                    fillStackY[fillStackPos] = tempTileY;
+
+                    tempTileX = cursorX;
+                    tempTileY = cursorY;
+
+                    if(temp2 == 0) floodFillZerosHard();
+                    else activateTileNoCount();
+
+                    tempTileX = fillStackX[fillStackPos];
+                    tempTileY = fillStackY[fillStackPos];
+                    --fillStackPos;
+                }
+            }
+
+            --fillStackPos;
         }
 
         //unclobber cursor x and y
@@ -1135,11 +775,11 @@ void update(void) {
 
     __asm__("inc %v", frameCount);
     __asm__("bne @frameCountNoOverflow"); //aka zero flag is set aka overflow happened
-    frameCountOverflow = TRUE;
+    //frameCountOverflow = TRUE;
     return;
 
     __asm__("@frameCountNoOverflow:");
-    frameCountOverflow = FALSE;
+    //frameCountOverflow = FALSE;
 }
 
 #endif
