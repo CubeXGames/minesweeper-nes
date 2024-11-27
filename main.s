@@ -18,10 +18,12 @@
 	.import		_ppu_on_all
 	.import		_oam_clear
 	.import		_oam_spr
+	.import		_oam_meta_spr
 	.import		_pad_poll
 	.import		_bank_spr
 	.import		_vram_adr
 	.import		_vram_put
+	.import		_vram_fill
 	.import		_set_vram_buffer
 	.import		_one_vram_buffer
 	.export		_temp0
@@ -32,7 +34,7 @@
 	.export		_tempShort0
 	.export		_global_i
 	.export		_global_j
-	.export		_frameSecondCount
+	.export		_frameCount
 	.export		_rngState
 	.export		_prevController
 	.export		_controller
@@ -43,36 +45,45 @@
 	.export		_tempTileY
 	.export		_numFlags
 	.export		_numSpacesLeft
+	.export		_boardWidth
+	.export		_boardHeight
 	.export		_checkAdjacentTilesFunction
 	.export		_numMinesSetInByte
-	.export		_hardSelectionSprite
+	.export		_selectionSprite
 	.export		_boardIsMine
 	.export		_boardIsActivated
 	.export		_boardIsFlag
 	.export		_fillStackX
 	.export		_fillStackY
 	.export		_fillStackPos
+	.export		_tileBitShiftOffset
+	.export		_ppuAttributeTableMirror
+	.export		_numMines
+	.export		_boardType
 	.export		_debugTemp0
-	.export		_bgPalette
+	.export		_gameBgPalette
 	.export		_sprPalette
+	.export		_easySelectorMetasprite
 	.export		_updateRNGNoController
-	.export		_getTileBaseHard
-	.export		_setTileBaseHard
-	.export		_getTileBaseEasy
-	.export		_setTileBaseEasy
+	.export		_getTileBase
+	.export		_setTileBase
 	.export		_printNumber
 	.export		_printTime
 	.export		_pushCursorXY
 	.export		_popCursorXY
 	.export		_checkAdjacentTiles
 	.export		__countMines
-	.export		_countMinesAroundTileHard
+	.export		_countMinesAroundTile
 	.export		_generateBoard
+	.export		_activateTileBase
 	.export		_activateTile
 	.export		_activateTileNoCount
 	.export		__checkFloodFillPos
 	.export		__checkPos2
-	.export		_hardUpdate
+	.export		_gameUpdateDifficultyIndependent
+	.export		_gameUpdateHard
+	.export		_gameUpdateEasy
+	.export		_displayBoard
 	.export		_update
 	.export		_main
 
@@ -83,28 +94,28 @@ _numMinesSetInByte:
 
 .segment	"RODATA"
 
-_bgPalette:
+_gameBgPalette:
 	.byte	$09
 	.byte	$1A
 	.byte	$0F
 	.byte	$30
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
+	.byte	$09
+	.byte	$08
+	.byte	$19
+	.byte	$30
+	.byte	$09
+	.byte	$19
+	.byte	$29
+	.byte	$30
+	.byte	$09
+	.byte	$07
+	.byte	$19
+	.byte	$30
 _sprPalette:
 	.byte	$09
+	.byte	$38
+	.byte	$27
 	.byte	$30
-	.byte	$52
-	.byte	$30
 	.byte	$00
 	.byte	$00
 	.byte	$00
@@ -117,6 +128,24 @@ _sprPalette:
 	.byte	$00
 	.byte	$00
 	.byte	$00
+_easySelectorMetasprite:
+	.byte	$00
+	.byte	$00
+	.byte	$01
+	.byte	$00
+	.byte	$08
+	.byte	$00
+	.byte	$01
+	.byte	$40
+	.byte	$00
+	.byte	$08
+	.byte	$01
+	.byte	$80
+	.byte	$08
+	.byte	$08
+	.byte	$01
+	.byte	$C0
+	.byte	$80
 
 .segment	"BSS"
 
@@ -137,7 +166,7 @@ _global_i:
 	.res	1,$00
 _global_j:
 	.res	1,$00
-_frameSecondCount:
+_frameCount:
 	.res	1,$00
 _rngState:
 	.res	2,$00
@@ -158,11 +187,15 @@ _tempTileY:
 _numFlags:
 	.res	1,$00
 _numSpacesLeft:
+	.res	2,$00
+_boardWidth:
+	.res	1,$00
+_boardHeight:
 	.res	1,$00
 _checkAdjacentTilesFunction:
 	.res	2,$00
 .segment	"BSS"
-_hardSelectionSprite:
+_selectionSprite:
 	.res	4,$00
 _boardIsMine:
 	.res	104,$00
@@ -171,11 +204,19 @@ _boardIsActivated:
 _boardIsFlag:
 	.res	104,$00
 _fillStackX:
-	.res	65,$00
+	.res	64,$00
 _fillStackY:
-	.res	65,$00
+	.res	64,$00
 _fillStackPos:
 	.res	1,$00
+_tileBitShiftOffset:
+	.res	1,$00
+_ppuAttributeTableMirror:
+	.res	64,$00
+_numMines:
+	.res	1,$00
+_boardType:
+	.res	2,$00
 _debugTemp0:
 	.res	1,$00
 
@@ -246,7 +287,7 @@ L0010:	lda     _controller
 ;
 	lda     _rngState
 ;
-; __asm__("clc");
+; __asm__("clc"); //todo maybe remove? depends if carry bit is uncertain at end of frame or not
 ;
 	clc
 ;
@@ -353,29 +394,22 @@ L0010:	lda     _controller
 .endproc
 
 ; ---------------------------------------------------------------
-; unsigned char __near__ getTileBaseHard (unsigned char *boardType)
+; unsigned char __near__ getTileBase (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_getTileBaseHard: near
+.proc	_getTileBase: near
 
 .segment	"CODE"
 
 ;
-; uchar getTileBaseHard(uchar* boardType) {
+; tempShort0 = ((cursorY << tileBitShiftOffset) + cursorX); //bit offset
 ;
-	jsr     pushax
-;
-; tempShort0 = ((cursorY << 5) + cursorX); //bit offset
-;
-	ldx     #$00
+	ldy     _tileBitShiftOffset
 	lda     _cursorY
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	ldx     tmp1
+	ldx     #$00
+	jsr     aslaxy
 	clc
 	adc     _cursorX
 	bcc     L0002
@@ -389,14 +423,12 @@ L0002:	sta     _tempShort0
 	ldx     _tempShort0+1
 	jsr     shrax3
 	clc
-	ldy     #$00
-	adc     (sp),y
+	adc     _boardType
 	sta     ptr1
 	txa
-	iny
-	adc     (sp),y
+	adc     _boardType+1
 	sta     ptr1+1
-	dey
+	ldy     #$00
 	lda     (ptr1),y
 	sta     ptr1
 	lda     _tempShort0
@@ -412,34 +444,31 @@ L0003:	lsr     a
 ;
 ; }
 ;
-	jmp     incsp2
+	rts
 
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ setTileBaseHard (unsigned char *boardType, unsigned char value)
+; void __near__ setTileBase (unsigned char value)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_setTileBaseHard: near
+.proc	_setTileBase: near
 
 .segment	"CODE"
 
 ;
-; void setTileBaseHard(uchar* boardType, uchar value) {
+; void setTileBase(uchar value) {
 ;
 	jsr     pusha
 ;
-; tempShort0 = ((cursorY << 5) + cursorX); //bit offset
+; tempShort0 = ((cursorY << tileBitShiftOffset) + cursorX); //bit offset
 ;
-	ldx     #$00
+	ldy     _tileBitShiftOffset
 	lda     _cursorY
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	ldx     tmp1
+	ldx     #$00
+	jsr     aslaxy
 	clc
 	adc     _cursorX
 	bcc     L0002
@@ -460,22 +489,16 @@ L0002:	sta     _tempShort0
 ;
 ; boardType[temp4] = (boardType[temp4] & ~(0b1u << temp3)) | (value << temp3);
 ;
-	ldy     #$02
-	lda     (sp),y
-	tax
-	dey
-	lda     (sp),y
+	lda     _boardType
+	ldx     _boardType+1
 	clc
 	adc     _temp4
 	bcc     L0003
 	inx
 L0003:	sta     ptr2
 	stx     ptr2+1
-	iny
-	lda     (sp),y
-	tax
-	dey
-	lda     (sp),y
+	lda     _boardType
+	ldx     _boardType+1
 	ldy     _temp4
 	sta     ptr1
 	stx     ptr1+1
@@ -505,239 +528,61 @@ L0005:	asl     a
 ;
 ; }
 ;
-	jmp     incsp3
+	jmp     incsp1
 
 .endproc
 
 ; ---------------------------------------------------------------
-; unsigned char __near__ getTileBaseEasy (unsigned char *boardType)
+; unsigned char __near__ getTileIsMine (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_getTileBaseEasy: near
+.proc	_getTileIsMine: near
 
 .segment	"CODE"
 
 ;
-; uchar getTileBaseEasy(uchar* boardType) {
+; boardType = boardIsMine;
 ;
-	jsr     pushax
-;
-; tempShort0 = ((cursorY << 4) + cursorX); //bit offset
-;
-	ldx     #$00
-	lda     _cursorY
-	jsr     aslax4
-	clc
-	adc     _cursorX
-	bcc     L0002
-	inx
-L0002:	sta     _tempShort0
-	stx     _tempShort0+1
-;
-; return (boardType[tempShort0 >> 3] >> (tempShort0 & 0b111u)) & 0b1u;
-;
-	lda     _tempShort0
-	ldx     _tempShort0+1
-	jsr     shrax3
-	clc
-	ldy     #$00
-	adc     (sp),y
-	sta     ptr1
-	txa
-	iny
-	adc     (sp),y
-	sta     ptr1+1
-	dey
-	lda     (ptr1),y
-	sta     ptr1
-	lda     _tempShort0
-	and     #$07
-	tay
-	lda     ptr1
-L0003:	lsr     a
-	dey
-	bpl     L0003
-	rol     a
-	and     #$01
-	ldx     #$00
-;
-; }
-;
-	jmp     incsp2
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ setTileBaseEasy (unsigned char *boardType, unsigned char value)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_setTileBaseEasy: near
-
-.segment	"CODE"
-
-;
-; void setTileBaseEasy(uchar* boardType, uchar value) {
-;
-	jsr     pusha
-;
-; tempShort0 = ((cursorY << 4) + cursorX); //bit offset
-;
-	ldx     #$00
-	lda     _cursorY
-	jsr     aslax4
-	clc
-	adc     _cursorX
-	bcc     L0002
-	inx
-L0002:	sta     _tempShort0
-	stx     _tempShort0+1
-;
-; temp4 = tempShort0 >> 3;
-;
-	jsr     shrax3
-	sta     _temp4
-;
-; temp3 = tempShort0 & 0b111;
-;
-	lda     _tempShort0
-	and     #$07
-	sta     _temp3
-;
-; boardType[temp4] = (boardType[temp4] & ~(0b1u << temp3)) | (value << temp3);
-;
-	ldy     #$02
-	lda     (sp),y
-	tax
-	dey
-	lda     (sp),y
-	clc
-	adc     _temp4
-	bcc     L0003
-	inx
-L0003:	sta     ptr2
-	stx     ptr2+1
-	iny
-	lda     (sp),y
-	tax
-	dey
-	lda     (sp),y
-	ldy     _temp4
-	sta     ptr1
-	stx     ptr1+1
-	lda     (ptr1),y
-	sta     ptr1
-	ldy     _temp3
-	lda     #$01
-L0006:	asl     a
-	dey
-	bpl     L0006
-	ror     a
-	eor     #$FF
-	and     ptr1
-	sta     sreg
-	ldy     #$00
-	lda     (sp),y
-	sta     ptr1
-	ldy     _temp3
-	lda     ptr1
-L0005:	asl     a
-	dey
-	bpl     L0005
-	ror     a
-	ora     sreg
-	ldy     #$00
-	sta     (ptr2),y
-;
-; }
-;
-	jmp     incsp3
-
-.endproc
-
-; ---------------------------------------------------------------
-; unsigned char __near__ getTileIsMineHard (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_getTileIsMineHard: near
-
-.segment	"CODE"
-
-;
-; return getTileBaseHard(boardIsMine);
-;
+	lda     #>(_boardIsMine)
+	sta     _boardType+1
 	lda     #<(_boardIsMine)
-	ldx     #>(_boardIsMine)
-	jmp     _getTileBaseHard
+	sta     _boardType
+;
+; return getTileBase();
+;
+	jmp     _getTileBase
 
 .endproc
 
 ; ---------------------------------------------------------------
-; unsigned char __near__ getTileIsMineEasy (void)
+; void __near__ setTileIsMine (unsigned char value)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_getTileIsMineEasy: near
+.proc	_setTileIsMine: near
 
 .segment	"CODE"
 
 ;
-; return getTileBaseEasy(boardIsMine);
+; inline void setTileIsMine(uchar value) {
 ;
+	jsr     pusha
+;
+; boardType = boardIsMine;
+;
+	lda     #>(_boardIsMine)
+	sta     _boardType+1
 	lda     #<(_boardIsMine)
-	ldx     #>(_boardIsMine)
-	jmp     _getTileBaseEasy
-
-.endproc
-
-; ---------------------------------------------------------------
-; unsigned char __near__ getTileIsActivatedHard (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_getTileIsActivatedHard: near
-
-.segment	"CODE"
-
+	sta     _boardType
 ;
-; return getTileBaseHard(boardIsActivated);
+; setTileBase(value);
 ;
-	lda     #<(_boardIsActivated)
-	ldx     #>(_boardIsActivated)
-	jmp     _getTileBaseHard
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ setTileIsActivatedHard (unsigned char value)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_setTileIsActivatedHard: near
-
-.segment	"CODE"
-
-;
-; inline void setTileIsActivatedHard(uchar value) {
-;
-	jsr     pusha
-;
-; setTileBaseHard(boardIsActivated, value);
-;
-	lda     #<(_boardIsActivated)
-	ldx     #>(_boardIsActivated)
-	jsr     pushax
-	ldy     #$02
+	ldy     #$00
 	lda     (sp),y
-	jsr     _setTileBaseHard
+	jsr     _setTileBase
 ;
 ; }
 ;
@@ -746,47 +591,56 @@ L0005:	asl     a
 .endproc
 
 ; ---------------------------------------------------------------
-; unsigned char __near__ getTileIsActivatedEasy (void)
+; unsigned char __near__ getTileIsActivated (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_getTileIsActivatedEasy: near
+.proc	_getTileIsActivated: near
 
 .segment	"CODE"
 
 ;
-; return getTileBaseEasy(boardIsActivated);
+; boardType = boardIsActivated;
 ;
+	lda     #>(_boardIsActivated)
+	sta     _boardType+1
 	lda     #<(_boardIsActivated)
-	ldx     #>(_boardIsActivated)
-	jmp     _getTileBaseEasy
+	sta     _boardType
+;
+; return getTileBase();
+;
+	jmp     _getTileBase
 
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ setTileIsActivatedEasy (unsigned char value)
+; void __near__ setTileIsActivated (unsigned char value)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_setTileIsActivatedEasy: near
+.proc	_setTileIsActivated: near
 
 .segment	"CODE"
 
 ;
-; inline void setTileIsActivatedEasy(uchar value) {
+; inline void setTileIsActivated(uchar value) {
 ;
 	jsr     pusha
 ;
-; setTileBaseEasy(boardIsActivated, value);
+; boardType = boardIsActivated;
 ;
+	lda     #>(_boardIsActivated)
+	sta     _boardType+1
 	lda     #<(_boardIsActivated)
-	ldx     #>(_boardIsActivated)
-	jsr     pushax
-	ldy     #$02
+	sta     _boardType
+;
+; setTileBase(value);
+;
+	ldy     #$00
 	lda     (sp),y
-	jsr     _setTileBaseEasy
+	jsr     _setTileBase
 ;
 ; }
 ;
@@ -795,96 +649,56 @@ L0005:	asl     a
 .endproc
 
 ; ---------------------------------------------------------------
-; unsigned char __near__ getTileIsFlagHard (void)
+; unsigned char __near__ getTileIsFlag (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_getTileIsFlagHard: near
+.proc	_getTileIsFlag: near
 
 .segment	"CODE"
 
 ;
-; return getTileBaseHard(boardIsFlag);
+; boardType = boardIsFlag;
 ;
+	lda     #>(_boardIsFlag)
+	sta     _boardType+1
 	lda     #<(_boardIsFlag)
-	ldx     #>(_boardIsFlag)
-	jmp     _getTileBaseHard
+	sta     _boardType
+;
+; return getTileBase();
+;
+	jmp     _getTileBase
 
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ setTileIsFlagHard (unsigned char value)
+; void __near__ setTileIsFlag (unsigned char value)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_setTileIsFlagHard: near
+.proc	_setTileIsFlag: near
 
 .segment	"CODE"
 
 ;
-; inline void setTileIsFlagHard(uchar value) {
+; inline void setTileIsFlag(uchar value) {
 ;
 	jsr     pusha
 ;
-; setTileBaseHard(boardIsFlag, value);
+; boardType = boardIsFlag;
 ;
+	lda     #>(_boardIsFlag)
+	sta     _boardType+1
 	lda     #<(_boardIsFlag)
-	ldx     #>(_boardIsFlag)
-	jsr     pushax
-	ldy     #$02
+	sta     _boardType
+;
+; setTileBase(value);
+;
+	ldy     #$00
 	lda     (sp),y
-	jsr     _setTileBaseHard
-;
-; }
-;
-	jmp     incsp1
-
-.endproc
-
-; ---------------------------------------------------------------
-; unsigned char __near__ getTileIsFlagEasy (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_getTileIsFlagEasy: near
-
-.segment	"CODE"
-
-;
-; return getTileBaseEasy(boardIsFlag);
-;
-	lda     #<(_boardIsFlag)
-	ldx     #>(_boardIsFlag)
-	jmp     _getTileBaseEasy
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ setTileIsFlagEasy (unsigned char value)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_setTileIsFlagEasy: near
-
-.segment	"CODE"
-
-;
-; inline void setTileIsFlagEasy(uchar value) {
-;
-	jsr     pusha
-;
-; setTileBaseEasy(boardIsFlag, value);
-;
-	lda     #<(_boardIsFlag)
-	ldx     #>(_boardIsFlag)
-	jsr     pushax
-	ldy     #$02
-	lda     (sp),y
-	jsr     _setTileBaseEasy
+	jsr     _setTileBase
 ;
 ; }
 ;
@@ -922,15 +736,15 @@ L0005:	asl     a
 	lda     (sp),y
 	cmp     #$64
 	lda     #$00
-	bcc     L001C
+	bcc     L001B
 ;
 ; while(number >= 100) {
 ;
-	jmp     L001A
+	jmp     L0019
 ;
 ; number -= 100;
 ;
-L0018:	lda     (sp),y
+L0017:	lda     (sp),y
 	sec
 	sbc     #$64
 	sta     (sp),y
@@ -941,9 +755,9 @@ L0018:	lda     (sp),y
 ;
 ; while(number >= 100) {
 ;
-L001A:	lda     (sp),y
+L0019:	lda     (sp),y
 	cmp     #$64
-	bcs     L0018
+	bcs     L0017
 ;
 ; one_vram_buffer(temp2 + NUMBER_TO_TILE, NTADR_A(x, y));
 ;
@@ -980,7 +794,7 @@ L001A:	lda     (sp),y
 ; temp2 = 0;
 ;
 	tya
-L001C:	sta     _temp2
+L001B:	sta     _temp2
 ;
 ; if(number >= 10) {
 ;
@@ -991,11 +805,11 @@ L001C:	sta     _temp2
 ;
 ; while(number >= 10) {
 ;
-	jmp     L0020
+	jmp     L001F
 ;
 ; number -= 10;
 ;
-L001E:	lda     (sp),y
+L001D:	lda     (sp),y
 	sec
 	sbc     #$0A
 	sta     (sp),y
@@ -1006,9 +820,9 @@ L001E:	lda     (sp),y
 ;
 ; while(number >= 10) {
 ;
-L0020:	lda     (sp),y
+L001F:	lda     (sp),y
 	cmp     #$0A
-	bcs     L001E
+	bcs     L001D
 ;
 ; one_vram_buffer(temp2 + NUMBER_TO_TILE, NTADR_A(x + (offset & 0b11), y));
 ;
@@ -1052,19 +866,19 @@ L0012:	ora     ptr1
 ;
 ; } else if(offset & 0b10000000) offset++;
 ;
-	jmp     L0028
+	jmp     L0027
 L0007:	ldy     #$00
 	lda     (sp),y
 	and     #$80
-	beq     L0022
-L0028:	clc
+	beq     L0021
+L0027:	clc
 	lda     #$01
 	adc     (sp),y
 	sta     (sp),y
 ;
 ; offset &= ~(0b10000000); //clear the has number begun thingy
 ;
-L0022:	lda     (sp),y
+L0021:	lda     (sp),y
 	and     #$7F
 	sta     (sp),y
 ;
@@ -1074,15 +888,52 @@ L0022:	lda     (sp),y
 	lda     (sp),y
 	clc
 	adc     #$30
+	jsr     pusha
+	ldy     #$02
+	ldx     #$00
+	lda     (sp),y
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	dey
+	lda     (sp),y
+	clc
+	ldy     #$03
+	adc     (sp),y
+	bcc     L0013
+	inx
+L0013:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++offset;
+;
+	ldy     #$00
+	clc
+	lda     #$01
+	adc     (sp),y
+	sta     (sp),y
 ;
 ; while(offset < 3) {
 ;
-	jmp     L0046
+	jmp     L0024
 ;
-; one_vram_buffer(0, NTADR_A(x + offset, y));
+; one_vram_buffer(0x9, NTADR_A(x + offset, y));
 ;
-L0023:	lda     #$00
-L0046:	jsr     pusha
+L0022:	lda     #$09
+	jsr     pusha
 	ldy     #$02
 	ldx     #$00
 	lda     (sp),y
@@ -1120,10 +971,15 @@ L0014:	ora     ptr1
 	adc     (sp),y
 	sta     (sp),y
 ;
+; ++temp0;
+;
+	inc     _temp0
+;
 ; while(offset < 3) {
 ;
+L0024:	lda     (sp),y
 	cmp     #$03
-	bcc     L0023
+	bcc     L0022
 ;
 ; }
 ;
@@ -1228,170 +1084,26 @@ L0014:	ora     ptr1
 ; if(cursorX == 0) {
 ;
 	lda     _cursorX
-	jne     L0015
+	jne     L0018
 ;
 ; if(cursorY == 0) {
 ;
 	lda     _cursorY
-	bne     L0013
-;
-; ++cursorX;
-;
-	inc     _cursorX
-;
-; checkAdjacentTilesFunction();
-;
-	lda     _checkAdjacentTilesFunction
-	ldx     _checkAdjacentTilesFunction+1
-	jsr     callax
-;
-; ++cursorY;
-;
-	inc     _cursorY
-;
-; checkAdjacentTilesFunction();
-;
-	lda     _checkAdjacentTilesFunction
-	ldx     _checkAdjacentTilesFunction+1
-	jsr     callax
-;
-; --cursorX;
-;
-	dec     _cursorX
-;
-; } else if(cursorY == (HARD_MAX_Y - 1)) {
-;
-	jmp     L001C
-L0013:	lda     _cursorY
-	cmp     #$19
-	bne     L0014
-;
-; ++cursorX;
-;
-	inc     _cursorX
-;
-; checkAdjacentTilesFunction();
-;
-	lda     _checkAdjacentTilesFunction
-	ldx     _checkAdjacentTilesFunction+1
-	jsr     callax
-;
-; --cursorY;
-;
-	dec     _cursorY
-;
-; checkAdjacentTilesFunction();
-;
-	lda     _checkAdjacentTilesFunction
-	ldx     _checkAdjacentTilesFunction+1
-	jsr     callax
-;
-; --cursorX;
-;
-	dec     _cursorX
-;
-; } else {
-;
-	jmp     L001C
-;
-; ++cursorY;
-;
-L0014:	inc     _cursorY
-;
-; checkAdjacentTilesFunction();
-;
-	lda     _checkAdjacentTilesFunction
-	ldx     _checkAdjacentTilesFunction+1
-	jsr     callax
-;
-; ++cursorX;
-;
-	inc     _cursorX
-;
-; checkAdjacentTilesFunction();
-;
-	lda     _checkAdjacentTilesFunction
-	ldx     _checkAdjacentTilesFunction+1
-	jsr     callax
-;
-; --cursorY;
-;
-	dec     _cursorY
-;
-; checkAdjacentTilesFunction();
-;
-	lda     _checkAdjacentTilesFunction
-	ldx     _checkAdjacentTilesFunction+1
-	jsr     callax
-;
-; --cursorY;
-;
-	dec     _cursorY
-;
-; checkAdjacentTilesFunction();
-;
-	lda     _checkAdjacentTilesFunction
-	ldx     _checkAdjacentTilesFunction+1
-	jsr     callax
-;
-; --cursorX;
-;
-	dec     _cursorX
-;
-; } else if(cursorX == (HARD_MAX_X - 1)) {
-;
-	jmp     L001C
-L0015:	lda     _cursorX
-	cmp     #$1F
-	bne     L0018
-;
-; if(cursorY == 0) {
-;
-	lda     _cursorY
-	bne     L0016
-;
-; --cursorX;
-;
-	dec     _cursorX
-;
-; checkAdjacentTilesFunction();
-;
-	lda     _checkAdjacentTilesFunction
-	ldx     _checkAdjacentTilesFunction+1
-	jsr     callax
-;
-; ++cursorY;
-;
-	inc     _cursorY
-;
-; } else if(cursorY == (HARD_MAX_Y - 1)) {
-;
-	jmp     L0020
-L0016:	lda     _cursorY
-	cmp     #$19
 	bne     L0017
 ;
-; --cursorX;
+; ++cursorX;
 ;
-	dec     _cursorX
+	inc     _cursorX
 ;
 ; checkAdjacentTilesFunction();
 ;
 	lda     _checkAdjacentTilesFunction
 	ldx     _checkAdjacentTilesFunction+1
 	jsr     callax
-;
-; --cursorY;
-;
-	dec     _cursorY
-;
-; } else {
-;
-	jmp     L0020
 ;
 ; ++cursorY;
 ;
-L0017:	inc     _cursorY
+	inc     _cursorY
 ;
 ; checkAdjacentTilesFunction();
 ;
@@ -1403,6 +1115,23 @@ L0017:	inc     _cursorY
 ;
 	dec     _cursorX
 ;
+; } else if(cursorY == (boardHeight - 1)) {
+;
+	jmp     L001C
+L0017:	lda     _cursorY
+	jsr     pusha0
+	lda     _boardHeight
+	sec
+	sbc     #$01
+	bcs     L0006
+	ldx     #$FF
+L0006:	jsr     tosicmp
+	bne     L0005
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
 ; checkAdjacentTilesFunction();
 ;
 	lda     _checkAdjacentTilesFunction
@@ -1419,17 +1148,74 @@ L0017:	inc     _cursorY
 	ldx     _checkAdjacentTilesFunction+1
 	jsr     callax
 ;
-; --cursorY;
+; --cursorX;
 ;
-	dec     _cursorY
+	dec     _cursorX
 ;
 ; } else {
 ;
-	jmp     L0020
+	jmp     L001C
+;
+; ++cursorY;
+;
+L0005:	inc     _cursorY
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; ++cursorX;
+;
+	inc     _cursorX
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; } else if(cursorX == (boardWidth - 1)) {
+;
+	jmp     L001C
+L0018:	lda     _cursorX
+	jsr     pusha0
+	lda     _boardWidth
+	sec
+	sbc     #$01
+	bcs     L000A
+	ldx     #$FF
+L000A:	jsr     tosicmp
+	bne     L0009
 ;
 ; if(cursorY == 0) {
 ;
-L0018:	lda     _cursorY
+	lda     _cursorY
 	bne     L0019
 ;
 ; --cursorX;
@@ -1446,6 +1232,94 @@ L0018:	lda     _cursorY
 ;
 	inc     _cursorY
 ;
+; } else if(cursorY == (boardHeight - 1)) {
+;
+	jmp     L0020
+L0019:	lda     _cursorY
+	jsr     pusha0
+	lda     _boardHeight
+	sec
+	sbc     #$01
+	bcs     L000E
+	ldx     #$FF
+L000E:	jsr     tosicmp
+	bne     L000D
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; } else {
+;
+	jmp     L0020
+;
+; ++cursorY;
+;
+L000D:	inc     _cursorY
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; --cursorY;
+;
+	dec     _cursorY
+;
+; } else {
+;
+	jmp     L0020
+;
+; if(cursorY == 0) {
+;
+L0009:	lda     _cursorY
+	bne     L001A
+;
+; --cursorX;
+;
+	dec     _cursorX
+;
+; checkAdjacentTilesFunction();
+;
+	lda     _checkAdjacentTilesFunction
+	ldx     _checkAdjacentTilesFunction+1
+	jsr     callax
+;
+; ++cursorY;
+;
+	inc     _cursorY
+;
 ; checkAdjacentTilesFunction();
 ;
 	lda     _checkAdjacentTilesFunction
@@ -1476,12 +1350,18 @@ L0018:	lda     _cursorY
 ;
 	dec     _cursorY
 ;
-; } else if(cursorY == (HARD_MAX_Y - 1)) {
+; } else if(cursorY == (boardHeight - 1)) {
 ;
 	jmp     L001C
-L0019:	lda     _cursorY
-	cmp     #$19
-	bne     L001A
+L001A:	lda     _cursorY
+	jsr     pusha0
+	lda     _boardHeight
+	sec
+	sbc     #$01
+	bcs     L0014
+	ldx     #$FF
+L0014:	jsr     tosicmp
+	bne     L0013
 ;
 ; --cursorX;
 ;
@@ -1533,7 +1413,7 @@ L0019:	lda     _cursorY
 ;
 ; ++cursorX;
 ;
-L001A:	inc     _cursorX
+L0013:	inc     _cursorX
 ;
 ; checkAdjacentTilesFunction();
 ;
@@ -1624,9 +1504,9 @@ L001C:	lda     _checkAdjacentTilesFunction
 .segment	"CODE"
 
 ;
-; temp2 += getTileIsMineHard();
+; temp2 += getTileIsMine();
 ;
-	jsr     _getTileIsMineHard
+	jsr     _getTileIsMine
 	clc
 	adc     _temp2
 	sta     _temp2
@@ -1638,12 +1518,12 @@ L001C:	lda     _checkAdjacentTilesFunction
 .endproc
 
 ; ---------------------------------------------------------------
-; unsigned char __near__ countMinesAroundTileHard (void)
+; unsigned char __near__ countMinesAroundTile (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_countMinesAroundTileHard: near
+.proc	_countMinesAroundTile: near
 
 .segment	"CODE"
 
@@ -1692,18 +1572,19 @@ L001C:	lda     _checkAdjacentTilesFunction
 	ora     #$10
 	sta     _gameMode
 ;
-; if((gameMode >> 3) & 0b1) { //is the game in hard mode?
+; if(IS_GAME_HARD()) {
 ;
-	lsr     a
-	lsr     a
-	lsr     a
-	and     #$01
+	and     #$08
 	beq     L0013
 ;
-; temp0 = HARD_NUM_MINES; //200 mines
+; temp0 = HARD_NUM_MINES; //200 mines by default
 ;
 	lda     #$C8
 	sta     _temp0
+;
+; numMines = HARD_NUM_MINES;
+;
+	sta     _numMines
 ;
 ; numFlags = HARD_NUM_MINES;
 ;
@@ -1711,8 +1592,10 @@ L001C:	lda     _checkAdjacentTilesFunction
 ;
 ; numSpacesLeft = (HARD_MAX_X * HARD_MAX_Y) - HARD_NUM_MINES;
 ;
+	ldx     #$02
 	lda     #$78
 	sta     _numSpacesLeft
+	stx     _numSpacesLeft+1
 ;
 ; temp1 = HARD_MAX_Y;
 ;
@@ -1726,30 +1609,38 @@ L001C:	lda     _checkAdjacentTilesFunction
 ;
 ; tempShort0 = HARD_MAX_X * HARD_MAX_Y;
 ;
-	ldx     #$03
+	inx
 	lda     #$40
 ;
-; } else {
+; } else { //otherwise game is in easy mode
 ;
 	jmp     L0017
 ;
-; temp0 = EASY_NUM_MINES; //85 mines
+; temp0 = EASY_NUM_MINES; //60 mines by default
 ;
-L0013:	lda     #$46
+L0013:	lda     #$37
 	sta     _temp0
+;
+; numMines = HARD_NUM_MINES;
+;
+	lda     #$C8
+	sta     _numMines
 ;
 ; numFlags = EASY_NUM_MINES;
 ;
+	lda     #$37
 	sta     _numFlags
 ;
 ; numSpacesLeft = (EASY_MAX_X * EASY_MAX_Y) - EASY_NUM_MINES;
 ;
-	lda     #$8A
+	ldx     #$00
+	lda     #$89
 	sta     _numSpacesLeft
+	stx     _numSpacesLeft+1
 ;
 ; temp1 = EASY_MAX_Y;
 ;
-	lda     #$0D
+	lda     #$0C
 	sta     _temp1
 ;
 ; temp2 = EASY_BOARD_USED_MEM_SIZE;
@@ -1759,8 +1650,7 @@ L0013:	lda     #$46
 ;
 ; tempShort0 = EASY_MAX_X * EASY_MAX_Y;
 ;
-	ldx     #$00
-	lda     #$D0
+	lda     #$C0
 L0017:	sta     _tempShort0
 	stx     _tempShort0+1
 ;
@@ -1871,94 +1761,40 @@ L0016:	lda     _gameMode
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ activateTile (void)
+; void __near__ activateTileBase (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_activateTile: near
+.proc	_activateTileBase: near
 
 .segment	"CODE"
 
 ;
-; if(!getTileIsActivatedHard()) {
+; if(temp0 >= MAX_SCREEN_UPDATES_PER_FRAME) {
 ;
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0002
+	lda     _temp0
+	cmp     #$20
+	bcc     L0029
 ;
-; setTileIsActivatedHard(TRUE);
+; ppu_wait_nmi();
 ;
-	lda     #$01
-	jsr     _setTileIsActivatedHard
+	jsr     _ppu_wait_nmi
 ;
-; countMinesAroundTileHard();
+; temp0 = 0;
 ;
-	jsr     _countMinesAroundTileHard
+	lda     #$00
+	sta     _temp0
 ;
-; one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(tempTileX, tempTileY + 3));
+; if(IS_GAME_HARD()) {
 ;
-	lda     _temp2
-	clc
-	adc     #$10
-	jsr     pusha
-	ldx     #$00
-	lda     _tempTileY
-	clc
-	adc     #$03
-	bcc     L0004
-	inx
-L0004:	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	lda     _tempTileX
-	ora     ptr1
-	pha
-	lda     tmp1
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; --numSpacesLeft;
-;
-	dec     _numSpacesLeft
-;
-; }
-;
-L0002:	rts
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ activateTileNoCount (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_activateTileNoCount: near
-
-.segment	"CODE"
-
-;
-; if(!getTileIsActivatedHard()) {
-;
-	jsr     _getTileIsActivatedHard
-	tax
-	bne     L0005
-;
-; setTileIsActivatedHard(TRUE);
-;
-	lda     #$01
-	jsr     _setTileIsActivatedHard
+L0029:	lda     _gameMode
+	and     #$08
+	beq     L002A
 ;
 ; one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 3));
 ;
 	lda     _temp2
-	clc
-	adc     #$10
 	jsr     pusha
 	ldx     #$00
 	lda     _cursorY
@@ -1980,32 +1816,382 @@ L0004:	jsr     aslax4
 	pla
 	jsr     _one_vram_buffer
 ;
-; --numSpacesLeft;
-;
-	dec     _numSpacesLeft
-;
 ; ++temp0;
 ;
 	inc     _temp0
 ;
-; if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
+; } else {
 ;
-	lda     _temp0
-	cmp     #$40
-	bcc     L0005
+	jmp     L0016
 ;
-; ppu_wait_nmi();
+; if(temp2 == 8) temp2 = 0x10;
 ;
-	jsr     _ppu_wait_nmi
+L002A:	lda     _temp2
+	cmp     #$08
+	bne     L002B
+	lda     #$10
+	sta     _temp2
 ;
-; temp0 = 0;
+; one_vram_buffer(0x80 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 4));
 ;
+L002B:	lda     _temp2
+	asl     a
+	clc
+	adc     #$80
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	asl     a
+	bcc     L0022
+	inx
+	clc
+L0022:	adc     #$04
+	bcc     L0008
+	inx
+L0008:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _cursorX
+	asl     a
+	bcc     L0019
+	inx
+L0019:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0x81 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 4));
+;
+	lda     _temp2
+	asl     a
+	clc
+	adc     #$81
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	asl     a
+	bcc     L0023
+	inx
+	clc
+L0023:	adc     #$04
+	bcc     L000A
+	inx
+L000A:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _cursorX
+	asl     a
+	bcc     L0024
+	inx
+	clc
+L0024:	adc     #$01
+	bcc     L000B
+	inx
+L000B:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0x90 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 5));
+;
+	lda     _temp2
+	asl     a
+	clc
+	adc     #$90
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	asl     a
+	bcc     L0025
+	inx
+	clc
+L0025:	adc     #$05
+	bcc     L000D
+	inx
+L000D:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _cursorX
+	asl     a
+	bcc     L001D
+	inx
+L001D:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0x91 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 5));
+;
+	lda     _temp2
+	asl     a
+	clc
+	adc     #$91
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	asl     a
+	bcc     L0026
+	inx
+	clc
+L0026:	adc     #$05
+	bcc     L000F
+	inx
+L000F:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _cursorX
+	asl     a
+	bcc     L0027
+	inx
+	clc
+L0027:	adc     #$01
+	bcc     L0010
+	inx
+L0010:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = ((cursorY >> 1) << 3) + (cursorX >> 1) + 8;
+;
+	lda     #<(_fillStackX)
+	ldx     #>(_fillStackX)
+	clc
+	adc     _fillStackPos
+	bcc     L0011
+	inx
+L0011:	sta     sreg
+	stx     sreg+1
+	lda     _cursorY
+	lsr     a
+	asl     a
+	asl     a
+	asl     a
+	sta     ptr1
+	lda     _cursorX
+	lsr     a
+	clc
+	adc     ptr1
+	bcc     L0028
+	clc
+L0028:	adc     #$08
+	ldy     #$00
+	sta     (sreg),y
+;
+; ppuAttributeTableMirror[fillStackX[fillStackPos]] |= (0b11 << (((cursorX & 0b1) << 1) + ((cursorY & 0b1) << 2)));
+;
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	clc
+	adc     #<(_ppuAttributeTableMirror)
+	tay
 	lda     #$00
+	adc     #>(_ppuAttributeTableMirror)
+	tax
+	tya
+	sta     ptr2
+	stx     ptr2+1
+	sta     ptr1
+	stx     ptr1+1
+	ldy     #$00
+	lda     (ptr1),y
+	sta     sreg
+	lda     _cursorX
+	ldx     #$00
+	and     #$01
+	asl     a
+	bcc     L0020
+	inx
+L0020:	sta     ptr1
+	stx     ptr1+1
+	lda     _cursorY
+	ldx     #$00
+	and     #$01
+	jsr     aslax2
+	clc
+	adc     ptr1
+	pha
+	txa
+	adc     ptr1+1
+	pla
+	tay
+	lda     #$03
+L002C:	asl     a
+	dey
+	bpl     L002C
+	ror     a
+	ora     sreg
+	ldy     #$00
+	sta     (ptr2),y
+;
+; one_vram_buffer(ppuAttributeTableMirror[fillStackX[fillStackPos]], 0x23C0 + fillStackX[fillStackPos]);
+;
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	sta     ptr1
+	clc
+	lda     #>(_ppuAttributeTableMirror)
+	sta     ptr1+1
+	ldy     #<(_ppuAttributeTableMirror)
+	lda     (ptr1),y
+	jsr     pusha
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	clc
+	adc     #$C0
+	pha
+	lda     #$00
+	adc     #$23
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; --fillStackPos;
+;
+	dec     _fillStackPos
+;
+; temp0 += 5;
+;
+	lda     #$05
+	clc
+	adc     _temp0
 	sta     _temp0
+;
+; if(temp2 == 0x10) temp2 = 8;
+;
+	lda     _temp2
+	cmp     #$10
+	bne     L0016
+	lda     #$08
+	sta     _temp2
+;
+; --numSpacesLeft;
+;
+L0016:	ldx     _numSpacesLeft
+	bne     L0017
+	dec     _numSpacesLeft+1
+L0017:	dex
+	stx     _numSpacesLeft
 ;
 ; }
 ;
-L0005:	rts
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ activateTile (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_activateTile: near
+
+.segment	"CODE"
+
+;
+; if(!getTileIsActivated()) {
+;
+	jsr     _getTileIsActivated
+	tax
+	bne     L0002
+;
+; setTileIsActivated(TRUE);
+;
+	lda     #$01
+	jsr     _setTileIsActivated
+;
+; countMinesAroundTile();
+;
+	jsr     _countMinesAroundTile
+;
+; activateTileBase();
+;
+	jmp     _activateTileBase
+;
+; }
+;
+L0002:	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ activateTileNoCount (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_activateTileNoCount: near
+
+.segment	"CODE"
+
+;
+; if(!getTileIsActivated()) {
+;
+	jsr     _getTileIsActivated
+	tax
+	bne     L0002
+;
+; setTileIsActivated(TRUE);
+;
+	lda     #$01
+	jsr     _setTileIsActivated
+;
+; activateTileBase();
+;
+	jmp     _activateTileBase
+;
+; }
+;
+L0002:	rts
 
 .endproc
 
@@ -2020,49 +2206,43 @@ L0005:	rts
 .segment	"CODE"
 
 ;
-; if(!getTileIsMineHard() && !getTileIsActivatedHard()) {
+; if(!getTileIsMine() && !getTileIsActivated()) {
 ;
-	jsr     _getTileIsMineHard
+	jsr     _getTileIsMine
 	tax
 	bne     L0003
-	jsr     _getTileIsActivatedHard
+	jsr     _getTileIsActivated
 	tax
-	beq     L0009
+	beq     L0008
 L0003:	rts
 ;
 ; pushCursorXY();
 ;
-L0009:	jsr     _pushCursorXY
+L0008:	jsr     _pushCursorXY
 ;
-; temp2 = countMinesAroundTileHard();
+; temp2 = countMinesAroundTile();
 ;
-	jsr     _countMinesAroundTileHard
+	jsr     _countMinesAroundTile
 	sta     _temp2
 ;
 ; popCursorXY();
 ;
 	jsr     _popCursorXY
 ;
-; if(temp2 == 0) {
+; if(temp2 == 0) pushCursorXY();
 ;
 	lda     _temp2
 	bne     L0006
-;
-; if(fillStackPos < MAX_FLOOD_FILL_UPDATES) pushCursorXY();
-;
-	lda     _fillStackPos
-	cmp     #$40
-	bcs     L0008
 	jsr     _pushCursorXY
 ;
-; } else activateTileNoCount();
+; else activateTileNoCount();
 ;
-	jmp     L0008
+	jmp     L0007
 L0006:	jsr     _activateTileNoCount
 ;
-; checkAdjacentTilesFunction = _checkFloodFillPos;
+; checkAdjacentTilesFunction = _checkFloodFillPos; //checkAdjacentTilesFunction got changed by countMinesAroundTile so change it back
 ;
-L0008:	lda     #>(__checkFloodFillPos)
+L0007:	lda     #>(__checkFloodFillPos)
 	sta     _checkAdjacentTilesFunction+1
 	lda     #<(__checkFloodFillPos)
 	sta     _checkAdjacentTilesFunction
@@ -2084,17 +2264,14 @@ L0008:	lda     #>(__checkFloodFillPos)
 .segment	"CODE"
 
 ;
-; if(getTileIsFlagHard()) {
+; if(getTileIsFlag()) ++temp2;
 ;
-	jsr     _getTileIsFlagHard
+	jsr     _getTileIsFlag
 	tax
 	beq     L0002
-;
-; ++temp2;
-;
 	inc     _temp2
 ;
-; } else pushCursorXY();
+; else pushCursorXY();
 ;
 	rts
 L0002:	jmp     _pushCursorXY
@@ -2102,12 +2279,12 @@ L0002:	jmp     _pushCursorXY
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ floodFillZerosHard (void)
+; void __near__ floodFillZeros (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_floodFillZerosHard: near
+.proc	_floodFillZeros: near
 
 .segment	"CODE"
 
@@ -2140,7 +2317,7 @@ L0002:	jmp     _pushCursorXY
 ;
 ; while(fillStackPos != currentStackPos) {
 ;
-	jmp     L000C
+	jmp     L0031
 ;
 ; cursorX = fillStackX[fillStackPos];
 ;
@@ -2158,28 +2335,75 @@ L0004:	ldy     _fillStackPos
 ;
 	dec     _fillStackPos
 ;
-; if(getTileIsActivatedHard()) continue;
+; if(fillStackPos >= (FILL_STACK_SIZE - 0x4)) {
 ;
-	jsr     _getTileIsActivatedHard
+	lda     _fillStackPos
+	cmp     #$3C
+	bcc     L0009
+;
+; fillStackPos = currentStackPos + 1;
+;
+	ldy     #$00
+	lda     (sp),y
+	clc
+	adc     #$01
+	sta     _fillStackPos
+;
+; fillStackX[fillStackPos] = cursorX;
+;
+	ldy     _fillStackPos
+	lda     _cursorX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = cursorY;
+;
+	ldy     _fillStackPos
+	lda     _cursorY
+	sta     _fillStackY,y
+;
+; if(getTileIsActivated()) continue;
+;
+L0009:	jsr     _getTileIsActivated
 	tax
-	bne     L000C
+	jne     L0031
 ;
-; setTileIsActivatedHard(TRUE);
+; setTileIsActivated(TRUE);
 ;
 	lda     #$01
-	jsr     _setTileIsActivatedHard
+	jsr     _setTileIsActivated
+;
+; if(temp0 >= MAX_SCREEN_UPDATES_PER_FRAME) {
+;
+	lda     _temp0
+	cmp     #$20
+	bcc     L002F
+;
+; ppu_wait_nmi();
+;
+	jsr     _ppu_wait_nmi
+;
+; temp0 = 0;
+;
+	lda     #$00
+	sta     _temp0
+;
+; if(IS_GAME_HARD()) {
+;
+L002F:	lda     _gameMode
+	and     #$08
+	beq     L0030
 ;
 ; one_vram_buffer(NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 3));
 ;
-	lda     #$10
+	lda     #$00
 	jsr     pusha
-	ldx     #$00
+	tax
 	lda     _cursorY
 	clc
 	adc     #$03
-	bcc     L000A
+	bcc     L0010
 	inx
-L000A:	jsr     aslax4
+L0010:	jsr     aslax4
 	stx     tmp1
 	asl     a
 	rol     tmp1
@@ -2193,32 +2417,286 @@ L000A:	jsr     aslax4
 	pla
 	jsr     _one_vram_buffer
 ;
-; --numSpacesLeft;
-;
-	dec     _numSpacesLeft
-;
 ; ++temp0;
 ;
 	inc     _temp0
 ;
-; if(temp0 >= MAX_FLOOD_FILL_UPDATES) {
+; } else {
 ;
-	lda     _temp0
-	cmp     #$40
-	bcc     L000B
+	jmp     L0011
 ;
-; ppu_wait_nmi();
+; one_vram_buffer(0x80, NTADR_A(cursorX << 1, (cursorY << 1) + 4));
 ;
-	jsr     _ppu_wait_nmi
+L0030:	lda     #$80
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	asl     a
+	bcc     L0028
+	inx
+	clc
+L0028:	adc     #$04
+	bcc     L0012
+	inx
+L0012:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _cursorX
+	asl     a
+	bcc     L001F
+	inx
+L001F:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
 ;
-; temp0 = 0;
+; one_vram_buffer(0x81, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 4));
 ;
+	lda     #$81
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	asl     a
+	bcc     L0029
+	inx
+	clc
+L0029:	adc     #$04
+	bcc     L0013
+	inx
+L0013:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _cursorX
+	asl     a
+	bcc     L002A
+	inx
+	clc
+L002A:	adc     #$01
+	bcc     L0014
+	inx
+L0014:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0x90, NTADR_A(cursorX << 1, (cursorY << 1) + 5));
+;
+	lda     #$90
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	asl     a
+	bcc     L002B
+	inx
+	clc
+L002B:	adc     #$05
+	bcc     L0015
+	inx
+L0015:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _cursorX
+	asl     a
+	bcc     L0023
+	inx
+L0023:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0x91, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 5));
+;
+	lda     #$91
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	asl     a
+	bcc     L002C
+	inx
+	clc
+L002C:	adc     #$05
+	bcc     L0016
+	inx
+L0016:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _cursorX
+	asl     a
+	bcc     L002D
+	inx
+	clc
+L002D:	adc     #$01
+	bcc     L0017
+	inx
+L0017:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = ((cursorY >> 1) << 3) + (cursorX >> 1) + 8;
+;
+	lda     #<(_fillStackX)
+	ldx     #>(_fillStackX)
+	clc
+	adc     _fillStackPos
+	bcc     L0018
+	inx
+L0018:	sta     sreg
+	stx     sreg+1
+	lda     _cursorY
+	lsr     a
+	asl     a
+	asl     a
+	asl     a
+	sta     ptr1
+	lda     _cursorX
+	lsr     a
+	clc
+	adc     ptr1
+	bcc     L002E
+	clc
+L002E:	adc     #$08
+	ldy     #$00
+	sta     (sreg),y
+;
+; ppuAttributeTableMirror[fillStackX[fillStackPos]] |= (0b11 << (((cursorX & 0b1) << 1) + ((cursorY & 0b1) << 2)));
+;
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	clc
+	adc     #<(_ppuAttributeTableMirror)
+	tay
 	lda     #$00
+	adc     #>(_ppuAttributeTableMirror)
+	tax
+	tya
+	sta     ptr2
+	stx     ptr2+1
+	sta     ptr1
+	stx     ptr1+1
+	ldy     #$00
+	lda     (ptr1),y
+	sta     sreg
+	lda     _cursorX
+	ldx     #$00
+	and     #$01
+	asl     a
+	bcc     L0026
+	inx
+L0026:	sta     ptr1
+	stx     ptr1+1
+	lda     _cursorY
+	ldx     #$00
+	and     #$01
+	jsr     aslax2
+	clc
+	adc     ptr1
+	pha
+	txa
+	adc     ptr1+1
+	pla
+	tay
+	lda     #$03
+L0032:	asl     a
+	dey
+	bpl     L0032
+	ror     a
+	ora     sreg
+	ldy     #$00
+	sta     (ptr2),y
+;
+; one_vram_buffer(ppuAttributeTableMirror[fillStackX[fillStackPos]], 0x23C0 + fillStackX[fillStackPos]);
+;
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	sta     ptr1
+	clc
+	lda     #>(_ppuAttributeTableMirror)
+	sta     ptr1+1
+	ldy     #<(_ppuAttributeTableMirror)
+	lda     (ptr1),y
+	jsr     pusha
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	clc
+	adc     #$C0
+	pha
+	lda     #$00
+	adc     #$23
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; --fillStackPos;
+;
+	dec     _fillStackPos
+;
+; temp0 += 5;
+;
+	lda     #$05
+	clc
+	adc     _temp0
 	sta     _temp0
+;
+; --numSpacesLeft;
+;
+L0011:	ldx     _numSpacesLeft
+	bne     L001D
+	dec     _numSpacesLeft+1
+L001D:	dex
+	stx     _numSpacesLeft
 ;
 ; checkAdjacentTilesFunction = _checkFloodFillPos;
 ;
-L000B:	lda     #>(__checkFloodFillPos)
+	lda     #>(__checkFloodFillPos)
 	sta     _checkAdjacentTilesFunction+1
 	lda     #<(__checkFloodFillPos)
 	sta     _checkAdjacentTilesFunction
@@ -2229,14 +2707,10 @@ L000B:	lda     #>(__checkFloodFillPos)
 ;
 ; while(fillStackPos != currentStackPos) {
 ;
-L000C:	lda     _fillStackPos
+L0031:	lda     _fillStackPos
 	ldy     #$00
 	cmp     (sp),y
-	bne     L0004
-;
-; temp0 = 0;
-;
-	sty     _temp0
+	jne     L0004
 ;
 ; }
 ;
@@ -2245,17 +2719,17 @@ L000C:	lda     _fillStackPos
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ hardUpdate (void)
+; void __near__ gameUpdateDifficultyIndependent (void)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_hardUpdate: near
+.proc	_gameUpdateDifficultyIndependent: near
 
 .segment	"CODE"
 
 ;
-; temp0 = 0;
+; temp0 = 0; //reset the count of any update that have happened
 ;
 	lda     #$00
 	sta     _temp0
@@ -2263,7 +2737,7 @@ L000C:	lda     _fillStackPos
 ; if(debugTemp0) {
 ;
 	lda     _debugTemp0
-	beq     L0046
+	beq     L004F
 ;
 ; --debugTemp0;
 ;
@@ -2284,16 +2758,16 @@ L0003:	lda     #$00
 ;
 ; __asm__("sta %v", temp1);
 ;
-L0046:	sta     _temp1
+L004F:	sta     _temp1
 ;
 ; if(BUTTON_DOWN(PAD_RIGHT)) {
 ;
 	lda     _controller
 	and     #$01
-	beq     L004A
+	beq     L0053
 	lda     _prevController
 	and     #$01
-	bne     L004A
+	bne     L0053
 ;
 ; __asm__("ldx %v", cursorX);
 ;
@@ -2303,9 +2777,9 @@ L0046:	sta     _temp1
 ;
 	inx
 ;
-; __asm__("cpx #%b", HARD_MAX_X);
+; __asm__("cpx %v", boardWidth);
 ;
-	cpx     #$20
+	cpx     _boardWidth
 ;
 ; __asm__("bne @padRightSkip");
 ;
@@ -2330,12 +2804,12 @@ L0046:	sta     _temp1
 ;
 ; if(BUTTON_DOWN(PAD_LEFT)) {
 ;
-L004A:	lda     _controller
+L0053:	lda     _controller
 	and     #$02
-	beq     L004E
+	beq     L0057
 	lda     _prevController
 	and     #$02
-	bne     L004E
+	bne     L0057
 ;
 ; __asm__("ldx %v", cursorX);
 ;
@@ -2349,9 +2823,13 @@ L004A:	lda     _controller
 ;
 	bpl     @padLeftSkip
 ;
-; __asm__("ldx #%b", HARD_MAX_X - 1);
+; __asm__("ldx %v", boardWidth);
 ;
-	ldx     #$1F
+	ldx     _boardWidth
+;
+; __asm__("dex");
+;
+	dex
 ;
 ; __asm__("stx %v", cursorX);
 ;
@@ -2368,12 +2846,12 @@ L004A:	lda     _controller
 ;
 ; if(BUTTON_DOWN(PAD_DOWN)) {
 ;
-L004E:	lda     _controller
+L0057:	lda     _controller
 	and     #$04
-	beq     L0052
+	beq     L005B
 	lda     _prevController
 	and     #$04
-	bne     L0052
+	bne     L005B
 ;
 ; __asm__("ldx %v", cursorY);
 ;
@@ -2383,9 +2861,9 @@ L004E:	lda     _controller
 ;
 	inx
 ;
-; __asm__("cpx #%b", HARD_MAX_Y);
+; __asm__("cpx %v", boardHeight);
 ;
-	cpx     #$1A
+	cpx     _boardHeight
 ;
 ; __asm__("bne @padDownSkip");
 ;
@@ -2410,7 +2888,7 @@ L004E:	lda     _controller
 ;
 ; if(BUTTON_DOWN(PAD_UP)) {
 ;
-L0052:	lda     _controller
+L005B:	lda     _controller
 	and     #$08
 	beq     L0010
 	lda     _prevController
@@ -2429,9 +2907,13 @@ L0052:	lda     _controller
 ;
 	bpl     @padUpSkip
 ;
-; __asm__("ldx #%b", HARD_MAX_Y - 1);
+; __asm__("ldx %v", boardHeight);
 ;
-	ldx     #$19
+	ldx     _boardHeight
+;
+; __asm__("dex");
+;
+	dex
 ;
 ; __asm__("stx %v", cursorY);
 ;
@@ -2474,99 +2956,60 @@ L0010:	lda     _temp1
 	lda     #$01
 	jsr     _printNumber
 ;
-; hardSelectionSprite.xPos = cursorX << 3; //x8 to align w/ tiles
+; if((frameCount & 0b11111) == 0) {
 ;
-L0014:	lda     _cursorX
-	asl     a
-	asl     a
-	asl     a
-	sta     _hardSelectionSprite+3
-;
-; hardSelectionSprite.yPos = (cursorY << 3) + 23; //1 less to be 1 higher (properly aligned)
-;
-	lda     _cursorY
-	asl     a
-	asl     a
-	asl     a
-	clc
-	adc     #$17
-	sta     _hardSelectionSprite
-;
-; if((frameSecondCount & 0b11111) == 0) {
-;
-	lda     _frameSecondCount
+L0014:	lda     _frameCount
 	and     #$1F
-	bne     L0057
+	bne     L0060
 ;
-; if((frameSecondCount & 0b111111) == 0) one_vram_buffer(WHITE, PALETTE_MEMORY_BEGIN + 0x11);
+; if((frameCount & 0b111111) == 0) one_vram_buffer(WHITE, PALETTE_MEMORY_BEGIN + 0x11);
 ;
-	lda     _frameSecondCount
+	lda     _frameCount
 	and     #$3F
-	bne     L0056
+	bne     L005F
 	lda     #$30
 ;
 ; else one_vram_buffer(0x38, PALETTE_MEMORY_BEGIN + 0x11);
 ;
-	jmp     L006A
-L0056:	lda     #$38
-L006A:	jsr     pusha
+	jmp     L0075
+L005F:	lda     #$38
+L0075:	jsr     pusha
 	ldx     #$3F
 	lda     #$11
 	jsr     _one_vram_buffer
 ;
-; if(BUTTON_DOWN(PAD_B) && !getTileIsActivatedHard()) {
+; if(BUTTON_DOWN(PAD_B) && !getTileIsActivated()) {
 ;
-L0057:	lda     _controller
+L0060:	lda     _controller
 	and     #$40
-	jeq     L005C
+	jeq     L0067
 	lda     _prevController
 	and     #$40
-	jne     L005C
-	jsr     _getTileIsActivatedHard
+	jne     L0067
+	jsr     _getTileIsActivated
 	tax
-	jne     L005C
+	jne     L0067
 ;
-; if(getTileIsFlagHard()) {
+; if(getTileIsFlag()) {
 ;
-	jsr     _getTileIsFlagHard
+	jsr     _getTileIsFlag
 	tax
-	beq     L005B
+	jeq     L0065
 ;
 ; ++numFlags;
 ;
 	inc     _numFlags
 ;
-; setTileIsFlagHard(FALSE);
+; setTileIsFlag(FALSE);
 ;
 	lda     #$00
-	jsr     _setTileIsFlagHard
+	jsr     _setTileIsFlag
 ;
-; one_vram_buffer(0x8 + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 3));
+; if(IS_GAME_HARD()) {
 ;
-	lda     _cursorX
-	and     #$01
-	jsr     pusha0
-	lda     _cursorY
-	and     #$01
-	jsr     tosxora0
-	asl     a
-	clc
-	adc     #$08
-;
-; } else if(numFlags > 0) {
-;
-	jmp     L007A
-L005B:	lda     _numFlags
-	beq     L0023
-;
-; --numFlags;
-;
-	dec     _numFlags
-;
-; setTileIsFlagHard(TRUE);
-;
-	lda     #$01
-	jsr     _setTileIsFlagHard
+	lda     _gameMode
+	and     #$08
+	beq     L0064
 ;
 ; one_vram_buffer(0x9 + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 3));
 ;
@@ -2579,14 +3022,14 @@ L005B:	lda     _numFlags
 	asl     a
 	clc
 	adc     #$09
-L007A:	jsr     pusha
+	jsr     pusha
 	ldx     #$00
 	lda     _cursorY
 	clc
 	adc     #$03
-	bcc     L0025
+	bcc     L0021
 	inx
-L0025:	jsr     aslax4
+L0021:	jsr     aslax4
 	stx     tmp1
 	asl     a
 	rol     tmp1
@@ -2600,9 +3043,295 @@ L0025:	jsr     aslax4
 	pla
 	jsr     _one_vram_buffer
 ;
+; ++temp0;
+;
+	inc     _temp0
+;
+; } else {
+;
+	jmp     L002B
+;
+; temp1 = cursorX << 1;
+;
+L0064:	lda     _cursorX
+	asl     a
+	sta     _temp1
+;
+; temp3 = (cursorY << 1) + 4;
+;
+	lda     _cursorY
+	asl     a
+	clc
+	adc     #$04
+	sta     _temp3
+;
+; one_vram_buffer(0xA2, NTADR_A(temp1, temp3));
+;
+	lda     #$A2
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _temp1
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0xA3, NTADR_A(temp1 + 1, temp3));
+;
+	lda     #$A3
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _temp1
+	clc
+	adc     #$01
+	bcc     L0024
+	inx
+L0024:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++temp3;
+;
+	inc     _temp3
+;
+; one_vram_buffer(0xB2, NTADR_A(temp1, temp3));
+;
+	lda     #$B2
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _temp1
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0xB3, NTADR_A(temp1 + 1, temp3));
+;
+	lda     #$B3
+;
+; } else if(numFlags > 0) {
+;
+	jmp     L008F
+L0065:	lda     _numFlags
+	jeq     L002B
+;
+; --numFlags;
+;
+	dec     _numFlags
+;
+; setTileIsFlag(TRUE);
+;
+	lda     #$01
+	jsr     _setTileIsFlag
+;
+; if(IS_GAME_HARD()) {
+;
+	lda     _gameMode
+	and     #$08
+	beq     L0066
+;
+; one_vram_buffer(0xA + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 3));
+;
+	lda     _cursorX
+	and     #$01
+	jsr     pusha0
+	lda     _cursorY
+	and     #$01
+	jsr     tosxora0
+	asl     a
+	clc
+	adc     #$0A
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	clc
+	adc     #$03
+	bcc     L002A
+	inx
+L002A:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _cursorX
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++temp0;
+;
+	inc     _temp0
+;
+; } else {
+;
+	jmp     L002B
+;
+; temp1 = cursorX << 1;
+;
+L0066:	lda     _cursorX
+	asl     a
+	sta     _temp1
+;
+; temp3 = (cursorY << 1) + 4;
+;
+	lda     _cursorY
+	asl     a
+	clc
+	adc     #$04
+	sta     _temp3
+;
+; one_vram_buffer(0xA4, NTADR_A(temp1, temp3));
+;
+	lda     #$A4
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _temp1
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0xA5, NTADR_A(temp1 + 1, temp3));
+;
+	lda     #$A5
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _temp1
+	clc
+	adc     #$01
+	bcc     L002D
+	inx
+L002D:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++temp3;
+;
+	inc     _temp3
+;
+; one_vram_buffer(0xB4, NTADR_A(temp1, temp3));
+;
+	lda     #$B4
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _temp1
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0xB5, NTADR_A(temp1 + 1, temp3));
+;
+	lda     #$B5
+L008F:	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _temp1
+	clc
+	adc     #$01
+	bcc     L002E
+	inx
+L002E:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; temp0 += 4;
+;
+	lda     #$04
+	clc
+	adc     _temp0
+	sta     _temp0
+;
 ; printNumber(numFlags, 7, 1);
 ;
-L0023:	jsr     decsp2
+L002B:	jsr     decsp2
 	lda     _numFlags
 	ldy     #$01
 	sta     (sp),y
@@ -2614,7 +3343,7 @@ L0023:	jsr     decsp2
 ;
 ; tempTileX = cursorX;
 ;
-L005C:	lda     _cursorX
+L0067:	lda     _cursorX
 	sta     _tempTileX
 ;
 ; tempTileY = cursorY;
@@ -2622,29 +3351,29 @@ L005C:	lda     _cursorX
 	lda     _cursorY
 	sta     _tempTileY
 ;
-; if(!getTileIsFlagHard() && !getTileIsActivatedHard()) {
+; if(!getTileIsFlag() && !getTileIsActivated()) {
 ;
-	jsr     _getTileIsFlagHard
+	jsr     _getTileIsFlag
 	tax
-	bne     L0062
-	jsr     _getTileIsActivatedHard
+	bne     L006D
+	jsr     _getTileIsActivated
 	tax
-	bne     L0062
+	bne     L006D
 ;
 ; if(BUTTON_DOWN(PAD_A)) {
 ;
 	lda     _controller
 	and     #$80
-	beq     L0061
+	beq     L006C
 	lda     _prevController
 	and     #$80
-	bne     L0061
+	bne     L006C
 ;
-; if(getTileIsMineHard()) {
+; if(getTileIsMine()) {
 ;
-	jsr     _getTileIsMineHard
+	jsr     _getTileIsMine
 	tax
-	beq     L002E
+	beq     L0037
 ;
 ; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
 ;
@@ -2661,34 +3390,34 @@ L005C:	lda     _cursorX
 ;
 ; } else {
 ;
-	jmp     L0061
+	jmp     L006C
 ;
 ; pushCursorXY();
 ;
-L002E:	jsr     _pushCursorXY
+L0037:	jsr     _pushCursorXY
 ;
-; countMinesAroundTileHard();
+; countMinesAroundTile();
 ;
-	jsr     _countMinesAroundTileHard
+	jsr     _countMinesAroundTile
 ;
 ; popCursorXY();
 ;
 	jsr     _popCursorXY
 ;
-; if(temp2 == 0) floodFillZerosHard(); //enjoy
+; if(temp2 == 0) floodFillZeros(); //enjoy
 ;
 	lda     _temp2
-	bne     L0030
-	jsr     _floodFillZerosHard
+	bne     L0039
+	jsr     _floodFillZeros
 ;
 ; else activateTileNoCount();
 ;
-	jmp     L0061
-L0030:	jsr     _activateTileNoCount
+	jmp     L006C
+L0039:	jsr     _activateTileNoCount
 ;
 ; cursorX = tempTileX;
 ;
-L0061:	lda     _tempTileX
+L006C:	lda     _tempTileX
 	sta     _cursorX
 ;
 ; cursorY = tempTileY;
@@ -2696,25 +3425,26 @@ L0061:	lda     _tempTileX
 	lda     _tempTileY
 	sta     _cursorY
 ;
-; if(BUTTON_DOWN(PAD_SELECT) && getTileIsActivatedHard()) {
+; if(BUTTON_DOWN(PAD_SELECT) && getTileIsActivated()) {
 ;
-L0062:	lda     _controller
+L006D:	lda     _controller
 	and     #$20
-	jeq     L0032
+	beq     L006F
 	lda     _prevController
 	and     #$20
-	jne     L0032
-	jsr     _getTileIsActivatedHard
+	bne     L006F
+	jsr     _getTileIsActivated
 	tax
-	jeq     L0032
+	bne     L003D
+L006F:	rts
 ;
 ; pushCursorXY();
 ;
-	jsr     _pushCursorXY
+L003D:	jsr     _pushCursorXY
 ;
-; temp2 = countMinesAroundTileHard();
+; temp2 = countMinesAroundTile();
 ;
-	jsr     _countMinesAroundTileHard
+	jsr     _countMinesAroundTile
 	sta     _temp2
 ;
 ; popCursorXY();
@@ -2756,21 +3486,21 @@ L0062:	lda     _controller
 ;
 	lda     _temp2
 	cmp     _temp1
-	bne     L0065
+	bne     L0070
 ;
 ; while(fillStackX[fillStackPos] != 0xFF) {
 ;
-	jmp     L003D
+	jmp     L0046
 ;
 ; popCursorXY();
 ;
-L0038:	jsr     _popCursorXY
+L0041:	jsr     _popCursorXY
 ;
-; if(getTileIsMineHard()) {
+; if(getTileIsMine()) {
 ;
-	jsr     _getTileIsMineHard
+	jsr     _getTileIsMine
 	tax
-	beq     L003C
+	beq     L0045
 ;
 ; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove, make screen be destroyed)
 ;
@@ -2787,15 +3517,15 @@ L0038:	jsr     _popCursorXY
 ;
 ; } else {
 ;
-	jmp     L003D
+	jmp     L0046
 ;
 ; pushCursorXY();
 ;
-L003C:	jsr     _pushCursorXY
+L0045:	jsr     _pushCursorXY
 ;
-; countMinesAroundTileHard();
+; countMinesAroundTile();
 ;
-	jsr     _countMinesAroundTileHard
+	jsr     _countMinesAroundTile
 ;
 ; popCursorXY();
 ;
@@ -2827,20 +3557,20 @@ L003C:	jsr     _pushCursorXY
 	lda     _cursorY
 	sta     _tempTileY
 ;
-; if(temp2 == 0) floodFillZerosHard();
+; if(temp2 == 0) floodFillZeros();
 ;
 	lda     _temp2
-	bne     L0040
-	jsr     _floodFillZerosHard
+	bne     L0049
+	jsr     _floodFillZeros
 ;
 ; else activateTileNoCount();
 ;
-	jmp     L0041
-L0040:	jsr     _activateTileNoCount
+	jmp     L004A
+L0049:	jsr     _activateTileNoCount
 ;
 ; tempTileX = fillStackX[fillStackPos];
 ;
-L0041:	ldy     _fillStackPos
+L004A:	ldy     _fillStackPos
 	lda     _fillStackX,y
 	sta     _tempTileX
 ;
@@ -2856,10 +3586,10 @@ L0041:	ldy     _fillStackPos
 ;
 ; while(fillStackX[fillStackPos] != 0xFF) {
 ;
-L003D:	ldy     _fillStackPos
+L0046:	ldy     _fillStackPos
 	lda     _fillStackX,y
 	cmp     #$FF
-	bne     L0038
+	bne     L0041
 ;
 ; --fillStackPos;
 ;
@@ -2867,7 +3597,7 @@ L003D:	ldy     _fillStackPos
 ;
 ; cursorX = tempTileX;
 ;
-L0065:	lda     _tempTileX
+L0070:	lda     _tempTileX
 	sta     _cursorX
 ;
 ; cursorY = tempTileY;
@@ -2875,24 +3605,643 @@ L0065:	lda     _tempTileX
 	lda     _tempTileY
 	sta     _cursorY
 ;
+; }
+;
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ gameUpdateHard (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_gameUpdateHard: near
+
+.segment	"CODE"
+
+;
+; selectionSprite.hardSelectionSprite.xPos = cursorX << 3; //x8 to align w/ tiles
+;
+	lda     _cursorX
+	asl     a
+	asl     a
+	asl     a
+	sta     _selectionSprite+3
+;
+; selectionSprite.hardSelectionSprite.yPos = (cursorY << 3) + 23; //1 less to be 1 higher (properly aligned)
+;
+	lda     _cursorY
+	asl     a
+	asl     a
+	asl     a
+	clc
+	adc     #$17
+	sta     _selectionSprite
+;
 ; oam_clear();
 ;
-L0032:	jsr     _oam_clear
+	jsr     _oam_clear
 ;
-; oam_spr(hardSelectionSprite.xPos, hardSelectionSprite.yPos, hardSelectionSprite.tile, hardSelectionSprite.attributes);
+; oam_spr(selectionSprite.hardSelectionSprite.xPos, selectionSprite.hardSelectionSprite.yPos,
 ;
 	jsr     decsp3
-	lda     _hardSelectionSprite+3
+	lda     _selectionSprite+3
 	ldy     #$02
 	sta     (sp),y
-	lda     _hardSelectionSprite
+	lda     _selectionSprite
 	dey
 	sta     (sp),y
-	lda     _hardSelectionSprite+1
+;
+; selectionSprite.hardSelectionSprite.tile, selectionSprite.hardSelectionSprite.attributes);
+;
+	lda     _selectionSprite+1
 	dey
 	sta     (sp),y
-	lda     _hardSelectionSprite+2
+	lda     _selectionSprite+2
 	jmp     _oam_spr
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ gameUpdateEasy (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_gameUpdateEasy: near
+
+.segment	"CODE"
+
+;
+; selectionSprite.easySelectionSprite.xPos = cursorX << 4;
+;
+	lda     _cursorX
+	asl     a
+	asl     a
+	asl     a
+	asl     a
+	sta     _selectionSprite+3
+;
+; selectionSprite.easySelectionSprite.yPos = (cursorY << 4) + 31; //1 less to be 1 higher (properly aligned)
+;
+	lda     _cursorY
+	asl     a
+	asl     a
+	asl     a
+	asl     a
+	clc
+	adc     #$1F
+	sta     _selectionSprite
+;
+; oam_clear();
+;
+	jsr     _oam_clear
+;
+; oam_meta_spr(selectionSprite.easySelectionSprite.xPos, selectionSprite.easySelectionSprite.yPos, easySelectorMetasprite);
+;
+	jsr     decsp2
+	lda     _selectionSprite+3
+	ldy     #$01
+	sta     (sp),y
+	lda     _selectionSprite
+	dey
+	sta     (sp),y
+	lda     #<(_easySelectorMetasprite)
+	ldx     #>(_easySelectorMetasprite)
+	jmp     _oam_meta_spr
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ displayBoard (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_displayBoard: near
+
+.segment	"CODE"
+
+;
+; ppu_off(); //so that any amount of updates can happen during the frame
+;
+	jsr     _ppu_off
+;
+; pal_bg(gameBgPalette); //set stuff up for the actual game
+;
+	lda     #<(_gameBgPalette)
+	ldx     #>(_gameBgPalette)
+	jsr     _pal_bg
+;
+; pal_spr(sprPalette);
+;
+	lda     #<(_sprPalette)
+	ldx     #>(_sprPalette)
+	jsr     _pal_spr
+;
+; bank_spr(1);
+;
+	lda     #$01
+	jsr     _bank_spr
+;
+; vram_adr(NTADR_A(0, 0)); //clear the screen to green
+;
+	ldx     #$20
+	lda     #$00
+	jsr     _vram_adr
+;
+; vram_fill(0x9, 32 * 30);
+;
+	lda     #$09
+	jsr     pusha
+	ldx     #$03
+	lda     #$C0
+	jsr     _vram_fill
+;
+; if(IS_GAME_HARD()) {
+;
+	lda     _gameMode
+	and     #$08
+	beq     L004D
+;
+; for(global_i = 0; global_i < boardWidth; ++global_i) {
+;
+	lda     #$00
+	sta     _global_i
+L0049:	lda     _global_i
+	cmp     _boardWidth
+	jcs     L0054
+;
+; for(global_j = 0; global_j < boardHeight; ++global_j) {
+;
+	lda     #$00
+	sta     _global_j
+L004A:	lda     _global_j
+	cmp     _boardHeight
+	bcs     L004B
+;
+; temp2 = 0x9 + (((global_i & 0b1) ^ (global_j & 0b1)) << 1); //tile num, alternates as a checkerboard
+;
+	lda     _global_i
+	and     #$01
+	jsr     pusha0
+	lda     _global_j
+	and     #$01
+	jsr     tosxora0
+	asl     a
+	clc
+	adc     #$09
+	sta     _temp2
+;
+; vram_adr(NTADR_A(global_i, global_j + 3));
+;
+	ldx     #$00
+	lda     _global_j
+	clc
+	adc     #$03
+	bcc     L000C
+	inx
+L000C:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _global_i
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _vram_adr
+;
+; vram_put(temp2);
+;
+	lda     _temp2
+	jsr     _vram_put
+;
+; for(global_j = 0; global_j < boardHeight; ++global_j) {
+;
+	inc     _global_j
+	jmp     L004A
+;
+; for(global_i = 0; global_i < boardWidth; ++global_i) {
+;
+L004B:	inc     _global_i
+	jmp     L0049
+;
+; for(global_i = 0; global_i < boardWidth; ++global_i) {
+;
+L004D:	sta     _global_i
+L004E:	lda     _global_i
+	cmp     _boardWidth
+	jcs     L000F
+;
+; for(global_j = 0; global_j < boardHeight; ++global_j) {
+;
+	lda     #$00
+	sta     _global_j
+L004F:	lda     _global_j
+	cmp     _boardHeight
+	jcs     L0050
+;
+; vram_adr(NTADR_A(global_i << 1, (global_j << 1) + 4));
+;
+	ldx     #$00
+	lda     _global_j
+	asl     a
+	bcc     L0045
+	inx
+	clc
+L0045:	adc     #$04
+	bcc     L0016
+	inx
+L0016:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _global_i
+	asl     a
+	bcc     L0041
+	inx
+L0041:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _vram_adr
+;
+; vram_put(0xA2/* + temp4*/);
+;
+	lda     #$A2
+	jsr     _vram_put
+;
+; vram_put(0xA3/* + temp4*/);
+;
+	lda     #$A3
+	jsr     _vram_put
+;
+; vram_adr(NTADR_A(global_i << 1, (global_j << 1) + 5));
+;
+	ldx     #$00
+	lda     _global_j
+	asl     a
+	bcc     L0046
+	inx
+	clc
+L0046:	adc     #$05
+	bcc     L0017
+	inx
+L0017:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _global_i
+	asl     a
+	bcc     L0043
+	inx
+L0043:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _vram_adr
+;
+; vram_put(0xB2/* + temp4*/);
+;
+	lda     #$B2
+	jsr     _vram_put
+;
+; vram_put(0xB3/* + temp4*/);
+;
+	lda     #$B3
+	jsr     _vram_put
+;
+; for(global_j = 0; global_j < boardHeight; ++global_j) {
+;
+	inc     _global_j
+	jmp     L004F
+;
+; for(global_i = 0; global_i < boardWidth; ++global_i) {
+;
+L0050:	inc     _global_i
+	jmp     L004E
+;
+; vram_adr(0x23C8);
+;
+L000F:	ldx     #$23
+	lda     #$C8
+	jsr     _vram_adr
+;
+; for(global_i = 0; global_i < (EASY_MAX_X >> 1); ++global_i) {
+;
+	lda     #$00
+	sta     _global_i
+L0051:	lda     _global_i
+	cmp     #$08
+	bcs     L0054
+;
+; for(global_j = 0; global_j < (EASY_MAX_Y >> 1); ++global_j) {
+;
+	lda     #$00
+	sta     _global_j
+L0052:	lda     _global_j
+	cmp     #$06
+	bcs     L0053
+;
+; vram_put(0b01101001);
+;
+	lda     #$69
+	jsr     _vram_put
+;
+; ppuAttributeTableMirror[((global_j << 3) + global_i) + 0x8] = 0b01101001;
+;
+	ldx     #$00
+	lda     _global_j
+	jsr     aslax3
+	clc
+	adc     _global_i
+	bcc     L0047
+	inx
+	clc
+L0047:	adc     #$08
+	bcc     L0048
+	inx
+	clc
+L0048:	adc     #<(_ppuAttributeTableMirror)
+	sta     ptr1
+	txa
+	adc     #>(_ppuAttributeTableMirror)
+	sta     ptr1+1
+	lda     #$69
+	ldy     #$00
+	sta     (ptr1),y
+;
+; for(global_j = 0; global_j < (EASY_MAX_Y >> 1); ++global_j) {
+;
+	inc     _global_j
+	jmp     L0052
+;
+; for(global_i = 0; global_i < (EASY_MAX_X >> 1); ++global_i) {
+;
+L0053:	inc     _global_i
+	jmp     L0051
+;
+; if(numMines == 0) goto finished;
+;
+L0054:	lda     _numMines
+	jeq     L0062
+;
+; ppu_on_all();
+;
+	jsr     _ppu_on_all
+;
+; ppu_wait_nmi();
+;
+	jsr     _ppu_wait_nmi
+;
+; for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
+;
+	lda     #$00
+	sta     _cursorX
+L0055:	lda     _cursorX
+	cmp     _boardWidth
+	bcs     L0059
+;
+; for(cursorY = 0; cursorY < boardHeight; ++cursorY) {
+;
+	lda     #$00
+	sta     _cursorY
+L0056:	lda     _cursorY
+	cmp     _boardHeight
+	bcs     L0058
+;
+; if(getTileIsMine()) continue;
+;
+	jsr     _getTileIsMine
+	tax
+	bne     L0057
+;
+; pushCursorXY();
+;
+	jsr     _pushCursorXY
+;
+; countMinesAroundTile();
+;
+	jsr     _countMinesAroundTile
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
+;
+; if(temp2 == 0) {
+;
+	lda     _temp2
+	bne     L0057
+;
+; tempTileX = cursorX;
+;
+	lda     _cursorX
+	sta     _tempTileX
+;
+; tempTileY = cursorY;
+;
+	lda     _cursorY
+	sta     _tempTileY
+;
+; floodFillZeros();
+;
+	jsr     _floodFillZeros
+;
+; goto finished;
+;
+	jmp     L0061
+;
+; for(cursorY = 0; cursorY < boardHeight; ++cursorY) {
+;
+L0057:	inc     _cursorY
+	jmp     L0056
+;
+; for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
+;
+L0058:	inc     _cursorX
+	jmp     L0055
+;
+; if(IS_GAME_HARD()) {
+;
+L0059:	lda     _gameMode
+	and     #$08
+	beq     L005A
+;
+; if((HARD_MAX_X * HARD_MAX_Y) - numMines <= 1) goto finished;
+;
+	lda     #$40
+	sec
+	sbc     _numMines
+	pha
+	lda     #$03
+	sbc     #$00
+	tax
+	pla
+	cmp     #$02
+	txa
+	sbc     #$00
+	bvc     L002F
+	eor     #$80
+L002F:	asl     a
+	lda     #$00
+	bcc     L005C
+	jmp     L0062
+;
+; } else if((EASY_MAX_X * EASY_MAX_Y) - numMines <= 1) goto finished;
+;
+L005A:	lda     #$C0
+	sec
+	sbc     _numMines
+	ldx     #$00
+	bcs     L0044
+	dex
+L0044:	cmp     #$02
+	txa
+	sbc     #$00
+	bvc     L0032
+	eor     #$80
+L0032:	asl     a
+	lda     #$00
+	bcs     L0062
+;
+; for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
+;
+L005C:	sta     _cursorX
+L005D:	lda     _cursorX
+	cmp     _boardWidth
+	bcs     L0061
+;
+; for(cursorY = 0; cursorY < boardHeight; ++cursorY) {
+;
+	lda     #$00
+	sta     _cursorY
+L005E:	lda     _cursorY
+	cmp     _boardHeight
+	bcs     L0060
+;
+; if(getTileIsMine()) {
+;
+	jsr     _getTileIsMine
+	tax
+	beq     L005F
+;
+; updateRNGNoController();
+;
+L003C:	jsr     _updateRNGNoController
+;
+; pushCursorXY();
+;
+	jsr     _pushCursorXY
+;
+; cursorX = boardWidth - rngState.byte1 % boardWidth;
+;
+	lda     _boardWidth
+	jsr     pusha0
+	lda     _rngState
+	jsr     pusha0
+	lda     _boardWidth
+	jsr     tosumoda0
+	jsr     tossubax
+	sta     _cursorX
+;
+; cursorY = boardHeight - rngState.byte2 % boardHeight;
+;
+	lda     _boardHeight
+	jsr     pusha0
+	lda     _rngState+1
+	jsr     pusha0
+	lda     _boardHeight
+	jsr     tosumoda0
+	jsr     tossubax
+	sta     _cursorY
+;
+; if(getTileIsMine()) goto thisShouldntHappenALotButJustInCaseItsHereAndWhyIsThisLabelSoLongIDontKnowButItsStayingLikeThisWhetherYouLikeItOrNot;
+;
+	jsr     _getTileIsMine
+	tax
+	bne     L003C
+;
+; setTileIsMine(TRUE);
+;
+	lda     #$01
+	jsr     _setTileIsMine
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
+;
+; setTileIsMine(FALSE);
+;
+	lda     #$00
+	jsr     _setTileIsMine
+;
+; activateTile();
+;
+	jsr     _activateTile
+;
+; goto finished;
+;
+	jmp     L0061
+;
+; for(cursorY = 0; cursorY < boardHeight; ++cursorY) {
+;
+L005F:	inc     _cursorY
+	jmp     L005E
+;
+; for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
+;
+L0060:	inc     _cursorX
+	jmp     L005D
+;
+; cursorX = 0;
+;
+L0061:	lda     #$00
+L0062:	sta     _cursorX
+;
+; cursorY = 0;
+;
+	sta     _cursorY
+;
+; ppu_wait_nmi();
+;
+	jmp     _ppu_wait_nmi
+
+.segment	"RODATA"
+
+M0001:
+	.word	$0000
+M0002:
+	.word	$0000
+M0003:
+	.word	$0000
+M0004:
+	.word	$0000
+M0007:
+	.word	$0000
 
 .endproc
 
@@ -2916,28 +4265,104 @@ L0032:	jsr     _oam_clear
 ;
 	sta     _controller
 ;
-; rngState.byte1 = 0xC2;
+; rngState.byte1 = 0xB1;
 ;
-	lda     #$C2
+	lda     #$B1
 	sta     _rngState
 ;
-; rngState.byte2 = 0xE3;
+; rngState.byte2 = 0x68;
 ;
-	lda     #$E3
+	lda     #$68
 	sta     _rngState+1
 ;
-; frameSecondCount = 0;
+; frameCount = 0;
 ;
 	lda     #$00
-	sta     _frameSecondCount
+	sta     _frameCount
 ;
-; hardSelectionSprite.tile = 0x00;
+; selectionSprite.hardSelectionSprite.tile = 0x00;
 ;
-	sta     _hardSelectionSprite+1
+	sta     _selectionSprite+1
 ;
-; hardSelectionSprite.attributes = 0b00000000;
+; selectionSprite.hardSelectionSprite.attributes = 0b00000000;
 ;
-	sta     _hardSelectionSprite+2
+	sta     _selectionSprite+2
+;
+; }
+;
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ setToHardMode (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_setToHardMode: near
+
+.segment	"CODE"
+
+;
+; gameMode |= (0b1 << 3);
+;
+	lda     _gameMode
+	ora     #$08
+	sta     _gameMode
+;
+; tileBitShiftOffset = 5;
+;
+	lda     #$05
+	sta     _tileBitShiftOffset
+;
+; boardWidth = HARD_MAX_X;
+;
+	lda     #$20
+	sta     _boardWidth
+;
+; boardHeight = HARD_MAX_Y;
+;
+	lda     #$1A
+	sta     _boardHeight
+;
+; }
+;
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ setToEasyMode (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_setToEasyMode: near
+
+.segment	"CODE"
+
+;
+; gameMode &= ~(0b1 << 3);
+;
+	lda     _gameMode
+	and     #$F7
+	sta     _gameMode
+;
+; tileBitShiftOffset = 4;
+;
+	lda     #$04
+	sta     _tileBitShiftOffset
+;
+; boardWidth = EASY_MAX_X;
+;
+	lda     #$10
+	sta     _boardWidth
+;
+; boardHeight = EASY_MAX_Y;
+;
+	lda     #$0C
+	sta     _boardHeight
 ;
 ; }
 ;
@@ -2964,13 +4389,25 @@ L0032:	jsr     _oam_clear
 ;
 	jsr     _updateRNG
 ;
-; hardUpdate();
+; gameUpdateDifficultyIndependent();
 ;
-	jsr     _hardUpdate
+	jsr     _gameUpdateDifficultyIndependent
 ;
-; __asm__("inc %v", frameSecondCount);
+; if(IS_GAME_HARD()) gameUpdateHard();
 ;
-	inc     _frameSecondCount
+	lda     _gameMode
+	and     #$08
+	beq     L0002
+	jsr     _gameUpdateHard
+;
+; else gameUpdateEasy();
+;
+	jmp     L0003
+L0002:	jsr     _gameUpdateEasy
+;
+; __asm__("inc %v", frameCount);
+;
+L0003:	inc     _frameCount
 ;
 ; }
 ;
@@ -2993,110 +4430,29 @@ L0032:	jsr     _oam_clear
 ;
 	jsr     _initState
 ;
-; gameMode |= (0b1 << 3);
-;
-	lda     _gameMode
-	ora     #$08
-	sta     _gameMode
-;
 ; ppu_off(); //screen off
 ;
 	jsr     _ppu_off
+;
+; setToEasyMode();
+;
+	jsr     _setToEasyMode
+;
+; set_vram_buffer();
+;
+	jsr     _set_vram_buffer
 ;
 ; generateBoard();
 ;
 	jsr     _generateBoard
 ;
-; pal_bg(bgPalette);
+; displayBoard();
 ;
-	lda     #<(_bgPalette)
-	ldx     #>(_bgPalette)
-	jsr     _pal_bg
-;
-; pal_spr(sprPalette);
-;
-	lda     #<(_sprPalette)
-	ldx     #>(_sprPalette)
-	jsr     _pal_spr
-;
-; bank_spr(1);
-;
-	lda     #$01
-	jsr     _bank_spr
-;
-; for(global_i = 0; global_i < HARD_MAX_X; ++global_i) {
-;
-	lda     #$00
-	sta     _global_i
-L000F:	lda     _global_i
-	cmp     #$20
-	bcs     L0003
-;
-; for(global_j = 0; global_j < HARD_MAX_Y; ++global_j) {
-;
-	lda     #$00
-	sta     _global_j
-L0010:	lda     _global_j
-	cmp     #$1A
-	bcs     L0011
-;
-; temp2 = 0x8 + (((global_i & 0b1) ^ (global_j & 0b1)) << 1); //tile num, alternates as a checkerboard
-;
-	lda     _global_i
-	and     #$01
-	jsr     pusha0
-	lda     _global_j
-	and     #$01
-	jsr     tosxora0
-	asl     a
-	clc
-	adc     #$08
-	sta     _temp2
-;
-; vram_adr(NTADR_A(global_i, global_j + 3));
-;
-	ldx     #$00
-	lda     _global_j
-	clc
-	adc     #$03
-	bcc     L000B
-	inx
-L000B:	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	lda     _global_i
-	ora     ptr1
-	pha
-	lda     tmp1
-	ora     #$20
-	tax
-	pla
-	jsr     _vram_adr
-;
-; vram_put(temp2);
-;
-	lda     _temp2
-	jsr     _vram_put
-;
-; for(global_j = 0; global_j < HARD_MAX_Y; ++global_j) {
-;
-	inc     _global_j
-	jmp     L0010
-;
-; for(global_i = 0; global_i < HARD_MAX_X; ++global_i) {
-;
-L0011:	inc     _global_i
-	jmp     L000F
+	jsr     _displayBoard
 ;
 ; ppu_on_all();
 ;
-L0003:	jsr     _ppu_on_all
-;
-; set_vram_buffer();
-;
-	jsr     _set_vram_buffer
+	jsr     _ppu_on_all
 ;
 ; cursorX = 0;
 ;
@@ -3144,7 +4500,7 @@ L0003:	jsr     _ppu_on_all
 ;
 ; ppu_wait_nmi();
 ;
-L000C:	jsr     _ppu_wait_nmi
+L0002:	jsr     _ppu_wait_nmi
 ;
 ; update();
 ;
@@ -3152,7 +4508,7 @@ L000C:	jsr     _ppu_wait_nmi
 ;
 ; while(TRUE) {
 ;
-	jmp     L000C
+	jmp     L0002
 
 .endproc
 

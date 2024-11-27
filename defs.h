@@ -2,6 +2,7 @@
 #define DEFS_H
 
 typedef unsigned char uchar;
+typedef unsigned short ushort;
 
 typedef struct {
 
@@ -35,18 +36,19 @@ typedef union {
 #define HARD_NUM_MINES 200
 
 #define EASY_MAX_X 16
-#define EASY_MAX_Y 13
-#define EASY_NUM_MINES 70
+#define EASY_MAX_Y 12
+#define EASY_NUM_MINES 55
 
-//32 by 26 max, 1 bit per tile, = 33 * 27 / 8 = 104
+//32 by 26 size for hard mode, 1 bit per tile, = 33 * 27 / 8 = 104
 #define BOARD_MEM_SIZE 104
 #define EASY_BOARD_USED_MEM_SIZE 26
 
 #define NUMBER_TO_TILE 0x30
-#define NUMBER_TO_NUMBER_TILE 0x10
+#define NUMBER_TO_NUMBER_TILE 0x00
 
-#define FILL_STACK_SIZE 0x41
-#define MAX_FLOOD_FILL_UPDATES 0x40
+#define FILL_STACK_SIZE 0x40
+//doesn't shake the screen
+#define MAX_SCREEN_UPDATES_PER_FRAME 0x20
 
 #define PALETTE_MEMORY_BEGIN 0x3f00
 
