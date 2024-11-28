@@ -22,6 +22,7 @@ void __fastcall__ one_vram_buffer(unsigned char data, int ppu_address);
 void __fastcall__ multi_vram_buffer_horz(const char * data, unsigned char len, int ppu_address);
 // to push multiple writes as one sequential horizontal write to the vram_buffer
 
+void __fastcall__ multi_vram_buffer_horz_fill(const char data, unsigned char len, int ppu_address);
 
 void __fastcall__ multi_vram_buffer_vert(const char * data, unsigned char len, int ppu_address);
 // to push multiple writes as one sequential vertical write to the vram_buffer

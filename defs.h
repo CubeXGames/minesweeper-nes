@@ -23,8 +23,6 @@ typedef union {
 } randomState;
 
 #define BLACK 0x0f
-#define DK_GY 0x00
-#define LT_GY 0x10
 #define WHITE 0x30
 
 #define TRUE 1
@@ -45,10 +43,13 @@ typedef union {
 
 #define NUMBER_TO_TILE 0x30
 #define NUMBER_TO_NUMBER_TILE 0x00
+#define BLANK_TILE 0x9
 
 #define FILL_STACK_SIZE 0x40
 //doesn't shake the screen
 #define MAX_SCREEN_UPDATES_PER_FRAME 0x20
+
+#define ATTRIBUTE_TABLE_SIZE 0x40
 
 #define PALETTE_MEMORY_BEGIN 0x3f00
 

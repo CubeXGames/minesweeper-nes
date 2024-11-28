@@ -7,6 +7,7 @@
 .export  _get_ppu_addr, _get_at_addr, _set_data_pointer, _set_mt_pointer, _buffer_4_mt, _buffer_1_mt
 .export _color_emphasis, _xy_split, _gray_line, _seed_rng
 .export _clear_vram_buffer
+.export _multi_vram_buffer_horz_fill
 
 .segment "CODE"
 
@@ -62,7 +63,41 @@ _multi_vram_buffer_common:
 	sta VRAM_BUF, x
 	stx VRAM_INDEX
 	rts
-	
+
+	;void multi_vram_buffer_horz_fill(char data, unsigned char len, int ppu_address);
+_multi_vram_buffer_horz_fill:
+	;note PTR = TEMP and TEMP+1
+
+	ldy VRAM_INDEX
+	sta VRAM_BUF+1, y
+	txa
+	clc
+	adc #$40 ; NT_UPD_HORZ
+	sta VRAM_BUF, y
+	jsr popa ;len
+		sta TEMP+3 ;loop count
+		ldy VRAM_INDEX
+		sta VRAM_BUF+2, y
+	jsr popa ;pointer to data
+		sta TEMP+4
+	ldx VRAM_INDEX ;need y for source, x is for dest and for vram_index
+		inx
+		inx
+		inx
+		
+	ldy #0
+	lda TEMP+4
+@loop:
+	sta VRAM_BUF, x
+	inx
+	iny
+	cpy TEMP+3
+	bne @loop
+	lda #$ff ;=NT_UPD_EOF
+	sta VRAM_BUF, x
+	stx VRAM_INDEX
+	rts
+
 	
 	
 
