@@ -7,18 +7,20 @@
 //16x15 or 32x30
 void main(void) {
 
-    ppu_off(); //screen off
+    ppu_off();
 
     initState();
+    showTitleScreen();
+    
     set_vram_buffer();
 	
-    setToEasyMode();
+    /*setToEasyMode();
 
     newGame();
 
     printNumber(cursorX, 1, 1);
     printNumber(cursorY, 4, 1);
-    printNumber(numFlags, 7, 1);
+    printNumber(numFlags, 7, 1);*/
 
     while(TRUE) {
 

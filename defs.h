@@ -2,7 +2,7 @@
 #define DEFS_H
 
 typedef unsigned char uchar;
-typedef unsigned short ushort;
+//typedef unsigned short ushort;
 
 typedef struct {
 
@@ -30,12 +30,14 @@ typedef union {
 #define DARK_GREEN_TILE 8
 
 #define HARD_MAX_X 32
-#define HARD_MAX_Y 26
-#define HARD_NUM_MINES 200
+#define HARD_MAX_Y 25
+#define HARD_NUM_MINES 185
+#define HARD_MAX_MINES 225
 
 #define EASY_MAX_X 16
 #define EASY_MAX_Y 12
-#define EASY_NUM_MINES 55
+#define EASY_NUM_MINES 50
+#define EASY_MAX_MINES 150
 
 //32 by 26 size for hard mode, 1 bit per tile, = 33 * 27 / 8 = 104
 #define BOARD_MEM_SIZE 104
@@ -52,6 +54,14 @@ typedef union {
 #define ATTRIBUTE_TABLE_SIZE 0x40
 
 #define PALETTE_MEMORY_BEGIN 0x3f00
+
+#define OPENING_BRACKET 0x5D
+#define CLOSING_BRACKET 0x5E
+
+#define MENU_X(x) x * 8
+#define MENU_Y(y) y * 8 + 6
+
+//0xCB58
 
 //commence visual studio code appeasement
 #ifndef __CC65__

@@ -46,7 +46,7 @@ void __fastcall__ pal_bright(unsigned char bright);
 
 void __fastcall__ pal_spr_bright(unsigned char bright);
 
-//set virtual bright for sprites background only
+//set virtual bright for background only
 
 void __fastcall__ pal_bg_bright(unsigned char bright);
 
