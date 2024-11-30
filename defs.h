@@ -31,13 +31,14 @@ typedef union {
 
 #define HARD_MAX_X 32
 #define HARD_MAX_Y 25
-#define HARD_NUM_MINES 185
+#define HARD_NUM_MINES 170
 #define HARD_MAX_MINES 225
 
 #define EASY_MAX_X 16
 #define EASY_MAX_Y 12
 #define EASY_NUM_MINES 50
 #define EASY_MAX_MINES 150
+#define EASY_MIN_MINES 10
 
 //32 by 26 size for hard mode, 1 bit per tile, = 33 * 27 / 8 = 104
 #define BOARD_MEM_SIZE 104
@@ -57,6 +58,18 @@ typedef union {
 
 #define OPENING_BRACKET 0x5D
 #define CLOSING_BRACKET 0x5E
+#define UNDERSCORE 0x5F
+#define COLON 0x2D
+
+//custom rle stuff to be at certain coordinates
+
+#define RLE_SINGLE_TILE 0b00
+#define RLE_MULTI_TILE 0b01
+#define RLE_NEW_LINE 010
+#define RLE_ATT_TABLE 0b11
+
+#define NUM_FLASH_FRAMES 3
+#define NUM_WAIT_FRAMES 75
 
 #define MENU_X(x) x * 8
 #define MENU_Y(y) y * 8 + 6

@@ -31,7 +31,6 @@ void __fastcall__ multi_vram_buffer_vert(const char * data, unsigned char len, i
 void clear_vram_buffer(void);
 // resets the vram buffer, if you need to undo something, like for a scene change
 
-
 unsigned char __fastcall__ get_pad_new(unsigned char pad);
 // pad 0 or 1, use AFTER pad_poll() to get the trigger / new button presses
 // more efficient than pad_trigger, which runs the entire pad_poll code again

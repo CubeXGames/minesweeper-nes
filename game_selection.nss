@@ -1,6 +1,6 @@
 NSTssTXT
 
-BtnTiles=0
+BtnTiles=1
 BtnChecker=0
 BtnSelTiles=0
 BtnChrBank1=1
@@ -138,7 +138,7 @@ MetaspritePlayBackCursor=0
 FilterCHR=1
 FilterName=1
 FileNameCHR=C:\Users\micha\Desktop\minesweeper-nes\Alpha
-FileNameName=C:\Users\micha\Desktop\minesweeper-nes\selectScreenNametable.h
+FileNameName=C:\Users\micha\Desktop\minesweeper-nes\selectScreenNametable
 FileNamePal=C:\Users\micha\Desktop\minesweeper-nes\titleScreen
 FileNameMetaSpriteBank=
 FileNameTileProps=
@@ -171,13 +171,13 @@ CHRUndo=002a542a542a5400ff81[6]ff007e664666[2]4200ff[8]007e[2]4662464200ff[8]007
 CHRCopy=00[4000]
 
 
-NameTable=09[42]4e45570947414d4509[78]47414d4509444946[2]4943554c545909[17]0d[5]09[16]5d454153595e0d094841524409[5]61[5]09[29]4e554d424552094f46094d494e455309[32]0e0f09[3d]435553544f4d095345[2]445c09[36]59455309[2]5d4e4f5e0930[4]09[31]53544152540947414d4509[173]
+NameTable=09[42]4e45570947414d4509[78]47414d4509444946[2]4943554c545909[17]0d[5]09[16]5d454153595e0d094841524409[33]4e554d424552094f46094d494e455309[32]0e0f09[3d]435553544f4d095345[2]445c09[36]59455309[2]5d4e4f5e09[36]53544152540947414d4509[173]
 
 
 NameCopy=00[3c0]
 
 
-NameUndo=09[42]4e45570947414d4509[78]47414d4509444946[2]4943554c545909[17]0d[5]09[16]5d454153595e0d094841524409[5]61[5]09[29]4e554d424552094f46094d494e455309[32]0e0f09[3d]435553544f4d095345[2]445c09[36]59455309[2]5d4e4f5e0930[4]09[31]53544152540947414d4509[173]
+NameUndo=09[42]4e45570947414d4509[78]47414d4509444946[2]4943554c545909[17]0d[5]09[16]5d454153595e0d094841524409[5]61[5]09[29]4e554d424552094f46094d494e455309[32]0e0f09[3d]435553544f4d095345[2]445c09[36]59455309[2]5d4e4f5e09[36]53544152540947414d4509[173]
 
 
 AttrTable=ff[38]0f[8]
@@ -324,14 +324,14 @@ MetatileSet_8x8_props=00[2000]
 MetatileSet_8x8_propsUndo=00[2000]
 
 
-MetatileSetLabels_2x2=Unlabeled,Unlabeled,Unlabeled,Unlabeled
-MetatileSetLabels_2x2Undo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+MetatileSetLabels_2x2=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+MetatileSetLabels_2x2Undo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
 
-MetatileSetLabels_4x4=Unlabeled,Unlabeled,Unlabeled,Unlabeled
-MetatileSetLabels_4x4Undo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+MetatileSetLabels_4x4=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+MetatileSetLabels_4x4Undo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
 
-MetatileSetLabels_8x8=Unlabeled,Unlabeled
-MetatileSetLabels_8x8Undo=Unlabeled,Unlabeled
+MetatileSetLabels_8x8=Unlabeled,Unlabeled
+MetatileSetLabels_8x8Undo=Unlabeled,Unlabeled
 
 CHRBankLabels=Unlabeled,Unlabeled,Unlabeled,Unlabeled
 
@@ -496,18 +496,18 @@ Checkpoint_MetatileSet_8x8_props=00[2000]
 Checkpoint_MetatileSet_8x8_propsUndo=00[2000]
 
 
-Checkpoint_MetatileSetLabels_2x2=Unlabeled,Unlabeled,Unlabeled,Unlabeled
-Checkpoint_MetatileSetLabels_2x2Undo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+Checkpoint_MetatileSetLabels_2x2=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+Checkpoint_MetatileSetLabels_2x2Undo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
 
-Checkpoint_MetatileSetLabels_4x4=Unlabeled,Unlabeled,Unlabeled,Unlabeled
-Checkpoint_MetatileSetLabels_4x4Undo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+Checkpoint_MetatileSetLabels_4x4=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+Checkpoint_MetatileSetLabels_4x4Undo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
 
-Checkpoint_MetatileSetLabels_8x8=Unlabeled,Unlabeled
-Checkpoint_MetatileSetLabels_8x8Undo=Unlabeled,Unlabeled
+Checkpoint_MetatileSetLabels_8x8=Unlabeled,Unlabeled
+Checkpoint_MetatileSetLabels_8x8Undo=Unlabeled,Unlabeled
 
-Checkpoint_CHRBankLabels=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+Checkpoint_CHRBankLabels=Unlabeled,Unlabeled,Unlabeled,Unlabeled
 
-Checkpoint_CHRBankLabelsUndo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
+Checkpoint_CHRBankLabelsUndo=Unlabeled,Unlabeled,Unlabeled,Unlabeled
 
 
 Checkpoint_32_NTSC_MsprDuration=00000006[100]
