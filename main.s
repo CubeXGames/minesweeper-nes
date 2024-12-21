@@ -453,7 +453,7 @@ _titleScreenNametable:
 	.byte	$32
 	.byte	$30
 	.byte	$32
-	.byte	$35
+	.byte	$34
 	.byte	$09
 	.byte	$02
 	.byte	$52
@@ -2085,45 +2085,73 @@ L0005:	asl     a
 ;
 	jsr     pusha
 ;
-; uchar offset = 0; //also for if the number's begun in bit 7 (save a stack variable)
+; uchar offset = 0;
 ;
 	lda     #$00
 	jsr     pusha
 ;
-; temp2 = 0;
+; multi_vram_buffer_horz_fill(BLANK_TILE, 3, NTADR_A(x, y));
 ;
-	sta     _temp2
+	jsr     decsp2
+	lda     #$09
+	ldy     #$01
+	sta     (sp),y
+	lda     #$03
+	dey
+	sta     (sp),y
+	tay
+	ldx     #$00
+	lda     (sp),y
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	iny
+	lda     (sp),y
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _multi_vram_buffer_horz_fill
 ;
 ; if(number >= 100) {
 ;
 	ldy     #$03
 	lda     (sp),y
 	cmp     #$64
+	bcc     L0015
+;
+; temp2 = 0;
+;
 	lda     #$00
-	bcc     L001B
+	sta     _temp2
 ;
 ; while(number >= 100) {
 ;
-	jmp     L0019
+	jmp     L0013
+;
+; ++temp2;
+;
+L0011:	inc     _temp2
 ;
 ; number -= 100;
 ;
-L0017:	lda     (sp),y
+	ldy     #$03
+	lda     (sp),y
 	sec
 	sbc     #$64
 	sta     (sp),y
 ;
-; ++temp2;
-;
-	inc     _temp2
-;
 ; while(number >= 100) {
 ;
-L0019:	lda     (sp),y
+L0013:	lda     (sp),y
 	cmp     #$64
-	bcs     L0017
+	bcs     L0011
 ;
-; one_vram_buffer(temp2 + NUMBER_TO_TILE, NTADR_A(x, y));
+; one_vram_buffer(NUMBER_TO_TILE + temp2, NTADR_A(x, y));
 ;
 	lda     _temp2
 	clc
@@ -2147,52 +2175,54 @@ L0019:	lda     (sp),y
 	pla
 	jsr     _one_vram_buffer
 ;
-; ++temp0;
-;
-	inc     _temp0
-;
-; offset += 0b10000001;
+; ++offset;
 ;
 	ldy     #$00
 	clc
-	lda     #$81
+	lda     #$01
 	adc     (sp),y
 	sta     (sp),y
 ;
-; temp2 = 0;
-;
-	tya
-L001B:	sta     _temp2
-;
-; if(number >= 10) {
+; if(number >= 10 || offset == 1) {
 ;
 	ldy     #$03
-	lda     (sp),y
+L0015:	lda     (sp),y
 	cmp     #$0A
-	bcc     L0007
+	bcs     L0018
+	ldy     #$00
+	lda     (sp),y
+	cmp     #$01
+	bne     L0007
+;
+; temp2 = 0;
+;
+L0018:	lda     #$00
+	sta     _temp2
 ;
 ; while(number >= 10) {
 ;
-	jmp     L001F
+	jmp     L000C
+;
+; ++temp2;
+;
+L0019:	inc     _temp2
 ;
 ; number -= 10;
 ;
-L001D:	lda     (sp),y
+	ldy     #$03
+	lda     (sp),y
 	sec
 	sbc     #$0A
 	sta     (sp),y
 ;
-; ++temp2;
-;
-	inc     _temp2
-;
 ; while(number >= 10) {
 ;
-L001F:	lda     (sp),y
+L000C:	ldy     #$03
+	lda     (sp),y
 	cmp     #$0A
-	bcs     L001D
+	bcs     L0019
 ;
-; one_vram_buffer(temp2 + NUMBER_TO_TILE, NTADR_A(x + (offset & 0b11), y));
+; one_vram_buffer(NUMBER_TO_TILE + temp2, NTADR_A(x + offset, y));
 ;
 	lda     _temp2
 	clc
@@ -2206,16 +2236,15 @@ L001F:	lda     (sp),y
 	asl     a
 	rol     tmp1
 	sta     ptr1
+	ldx     #$00
 	dey
 	lda     (sp),y
-	ldx     #$00
-	and     #$03
 	clc
 	ldy     #$03
 	adc     (sp),y
-	bcc     L0012
+	bcc     L000F
 	inx
-L0012:	ora     ptr1
+L000F:	ora     ptr1
 	pha
 	txa
 	ora     tmp1
@@ -2228,35 +2257,17 @@ L0012:	ora     ptr1
 	pla
 	jsr     _one_vram_buffer
 ;
-; ++temp0;
-;
-	inc     _temp0
-;
-; offset++;
+; ++offset;
 ;
 	ldy     #$00
-;
-; } else if(offset & 0b10000000) offset++;
-;
-	jmp     L0027
-L0007:	ldy     #$00
-	lda     (sp),y
-	and     #$80
-	beq     L0021
-L0027:	clc
+	clc
 	lda     #$01
 	adc     (sp),y
 	sta     (sp),y
 ;
-; offset &= ~(0b10000000); //clear the has number begun thingy
+; one_vram_buffer(NUMBER_TO_TILE + number, NTADR_A(x + offset, y));
 ;
-L0021:	lda     (sp),y
-	and     #$7F
-	sta     (sp),y
-;
-; one_vram_buffer(number + NUMBER_TO_TILE, NTADR_A(x + offset, y));
-;
-	ldy     #$03
+L0007:	ldy     #$03
 	lda     (sp),y
 	clc
 	adc     #$30
@@ -2275,9 +2286,9 @@ L0021:	lda     (sp),y
 	clc
 	ldy     #$03
 	adc     (sp),y
-	bcc     L0013
+	bcc     L0010
 	inx
-L0013:	ora     ptr1
+L0010:	ora     ptr1
 	pha
 	txa
 	ora     tmp1
@@ -2289,73 +2300,6 @@ L0013:	ora     ptr1
 	tax
 	pla
 	jsr     _one_vram_buffer
-;
-; ++temp0;
-;
-	inc     _temp0
-;
-; ++offset;
-;
-	ldy     #$00
-	clc
-	lda     #$01
-	adc     (sp),y
-	sta     (sp),y
-;
-; while(offset < 3) {
-;
-	jmp     L0024
-;
-; one_vram_buffer(0x9, NTADR_A(x + offset, y));
-;
-L0022:	lda     #$09
-	jsr     pusha
-	ldy     #$02
-	ldx     #$00
-	lda     (sp),y
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	dey
-	lda     (sp),y
-	clc
-	ldy     #$03
-	adc     (sp),y
-	bcc     L0014
-	inx
-L0014:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; ++offset;
-;
-	ldy     #$00
-	clc
-	lda     #$01
-	adc     (sp),y
-	sta     (sp),y
-;
-; ++temp0;
-;
-	inc     _temp0
-;
-; while(offset < 3) {
-;
-L0024:	lda     (sp),y
-	cmp     #$03
-	bcc     L0022
 ;
 ; }
 ;
@@ -4739,9 +4683,9 @@ L0003:	jsr     decsp3
 	lda     #$12
 	jsr     _printHexNumber
 ;
-; one_vram_buffer(OPENING_BRACKET, NTADR_A(16, 18));
+; one_vram_buffer(0xA, NTADR_A(16, 18)); //put down the flag
 ;
-	lda     #$5D
+	lda     #$0A
 	jsr     pusha
 	ldx     #$22
 	lda     #$50
@@ -4839,45 +4783,22 @@ L0003:	jsr     decsp3
 ;
 	lda     _numMines
 	cmp     #$0A
-	bcs     L0008
+	bcs     L0007
 	lda     #$01
 ;
 ; else if(numMines < 100) temp1 = 2;
 ;
-	jmp     L0007
-L0008:	lda     _numMines
+	jmp     L0006
+L0007:	lda     _numMines
 	cmp     #$64
-	bcs     L0009
+	bcs     L0008
 	lda     #$02
 ;
 ; else temp1 = 3;
 ;
-	jmp     L0007
-L0009:	lda     #$03
-L0007:	sta     _temp1
-;
-; one_vram_buffer(CLOSING_BRACKET, NTADR_A(17 + temp1, 18));
-;
-	lda     #$5E
-	jsr     pusha
-	ldx     #$00
-	lda     _temp1
-	clc
-	adc     #$11
-	bcc     L0006
-	inx
-L0006:	ora     #$40
-	pha
-	txa
-	ora     #$02
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
+	jmp     L0006
+L0008:	lda     #$03
+L0006:	sta     _temp1
 ;
 ; delay(60);
 ;
@@ -7165,7 +7086,7 @@ M0005:
 ;
 ; numMines = EASY_NUM_MINES;
 ;
-	lda     #$23
+	lda     #$28
 	sta     _numMines
 ;
 ; if(gameMode & (0b1 << 4)) {
@@ -7189,7 +7110,7 @@ M0005:
 ;
 ; maxMines = EASY_MAX_MINES;
 ;
-L0005:	lda     #$64
+L0005:	lda     #$6E
 	sta     _maxMines
 ;
 ; minMines = EASY_MIN_MINES;
@@ -7261,7 +7182,7 @@ L0004:	sta     _minMines
 ;
 ; maxMines = HARD_MAX_MINES;
 ;
-L0005:	lda     #$E1
+L0005:	lda     #$FA
 	sta     _maxMines
 ;
 ; minMines = HARD_MIN_MINES;
@@ -7796,7 +7717,7 @@ L0003:	lda     #$04
 ;
 	lda     _selectionArrowIndex
 	cmp     #$02
-	jne     L0096
+	jne     L0092
 ;
 ; gameSelectShouldUseArrow[3] = TRUE;
 ;
@@ -7821,7 +7742,7 @@ L0003:	lda     #$04
 ;
 ; else {
 ;
-	jmp     L00C4
+	jmp     L00C0
 ;
 ; ++selectionArrowIndex;
 ;
@@ -7834,7 +7755,7 @@ L007A:	inc     _selectionArrowIndex
 ;
 ; goto skipNA;
 ;
-	jmp     L00C0
+	jmp     L00BC
 ;
 ; } else if(BUTTON_DOWN(PAD_LEFT)) {
 ;
@@ -7867,12 +7788,12 @@ L0081:	dec     _selectionArrowIndex
 ;
 ; goto skipNA;
 ;
-	jmp     L00C0
+	jmp     L00BC
 ;
 ; sfx_play(SFX_SELECT, 0);
 ;
 L0082:	lda     #$00
-L00C4:	jsr     pusha
+L00C0:	jsr     pusha
 	jsr     _sfx_play
 ;
 ; temp0 = BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START);
@@ -7910,7 +7831,7 @@ L008C:	sta     _temp1
 ; if(isNumberArrowUp) {
 ;
 	lda     _isNumberArrowUp
-	beq     L0090
+	beq     L008E
 ;
 ; one_vram_buffer(0x1E, NTADR_A(3, 12));
 ;
@@ -7937,10 +7858,13 @@ L008C:	sta     _temp1
 	bcs     L001B
 	inc     _numMines
 ;
-; if(temp1 && numMines <= (maxMines - 10)) numMines += 10;
+; if(temp1) {
 ;
 L001B:	lda     _temp1
-	beq     L0029
+	beq     L002B
+;
+; if(numMines <= (maxMines - 10)) numMines += 10;
+;
 	lda     _numMines
 	jsr     pusha0
 	lda     _maxMines
@@ -7949,19 +7873,24 @@ L001B:	lda     _temp1
 	bcs     L0021
 	ldx     #$FF
 L0021:	jsr     tosicmp
-	bmi     L0022
-	bne     L0029
-L0022:	lda     #$0A
+	beq     L0076
+	bpl     L0020
+L0076:	lda     #$0A
 	clc
 	adc     _numMines
 ;
+; else numMines = maxMines;
+;
+	jmp     L0072
+L0020:	lda     _maxMines
+;
 ; } else {
 ;
-	jmp     L00C7
+	jmp     L0072
 ;
 ; one_vram_buffer(0x0E, NTADR_A(3, 12));
 ;
-L0090:	lda     #$0E
+L008E:	lda     #$0E
 	jsr     pusha
 	ldx     #$21
 	lda     #$83
@@ -7978,46 +7907,54 @@ L0090:	lda     #$0E
 ; if(temp0 && numMines > minMines) --numMines;
 ;
 	lda     _temp0
-	beq     L0025
+	beq     L0024
 	lda     _numMines
 	cmp     _minMines
-	beq     L0025
-	bcc     L0025
+	beq     L0024
+	bcc     L0024
 	dec     _numMines
 ;
-; if(temp1 && numMines >= (minMines + 10)) numMines -= 10;
+; if(temp1) {
 ;
-L0025:	lda     _temp1
-	beq     L0029
+L0024:	lda     _temp1
+	beq     L002B
+;
+; if(numMines >= (minMines + 10)) numMines -= 10;
+;
 	lda     _numMines
 	jsr     pusha0
 	lda     _minMines
 	clc
 	adc     #$0A
-	bcc     L002B
+	bcc     L002A
 	ldx     #$01
-L002B:	jsr     tosicmp
+L002A:	jsr     tosicmp
 	bmi     L0029
 	lda     _numMines
 	sec
 	sbc     #$0A
-L00C7:	sta     _numMines
+;
+; else numMines = minMines;
+;
+	jmp     L0072
+L0029:	lda     _minMines
+L0072:	sta     _numMines
 ;
 ; if(temp0 || temp1) sfx_play(SFX_SELECT, 0);
 ;
-L0029:	lda     _temp0
-	bne     L0095
+L002B:	lda     _temp0
+	bne     L0091
 	lda     _temp1
-	jeq     L00C0
-L0095:	lda     #$00
+	jeq     L00BC
+L0091:	lda     #$00
 	jsr     pusha
 	jsr     _sfx_play
 ;
 ; } else if(gameSelectShouldUseArrow[3] == FALSE) {
 ;
-	jmp     L00C0
-L0096:	lda     _gameSelectShouldUseArrow+3
-	jne     L00AC
+	jmp     L00BC
+L0092:	lda     _gameSelectShouldUseArrow+3
+	jne     L00A8
 ;
 ; one_vram_buffer(0x0E, NTADR_A(3, 12));
 ;
@@ -8039,10 +7976,10 @@ L0096:	lda     _gameSelectShouldUseArrow+3
 ;
 	lda     _controller
 	and     #$01
-	beq     L009B
+	beq     L0097
 	lda     _prevController
 	and     #$01
-	bne     L009B
+	bne     L0097
 ;
 ; isNumberArrowUp = TRUE;
 ;
@@ -8057,7 +7994,7 @@ L0096:	lda     _gameSelectShouldUseArrow+3
 ;
 	lda     _temp1
 	cmp     #$04
-	bne     L009F
+	bne     L009B
 ;
 ; gameSelectShouldUseArrow[3] = TRUE;
 ;
@@ -8074,16 +8011,16 @@ L0096:	lda     _gameSelectShouldUseArrow+3
 ;
 ; goto skipNA;
 ;
-	jmp     L00C0
+	jmp     L00BC
 ;
 ; } else if(BUTTON_DOWN(PAD_LEFT)) {
 ;
-L009B:	lda     _controller
+L0097:	lda     _controller
 	and     #$02
-	beq     L00A0
+	beq     L009C
 	lda     _prevController
 	and     #$02
-	bne     L00A0
+	bne     L009C
 ;
 ; isNumberArrowUp = FALSE;
 ;
@@ -8097,7 +8034,7 @@ L009B:	lda     _controller
 ;
 	lda     _temp1
 	cmp     #$FF
-	bne     L009F
+	bne     L009B
 ;
 ; gameSelectShouldUseArrow[3] = TRUE;
 ;
@@ -8114,25 +8051,25 @@ L009B:	lda     _controller
 ;
 ; goto skipNA;
 ;
-	jmp     L00C0
+	jmp     L00BC
 ;
 ; sfx_play(SFX_SELECT, 0);
 ;
-L009F:	lda     #$00
+L009B:	lda     #$00
 	jsr     pusha
 	jsr     _sfx_play
 ;
 ; one_vram_buffer(UNDERSCORE, NTADR_A(14 + temp1, 17));
 ;
-L00A0:	lda     #$5F
+L009C:	lda     #$5F
 	jsr     pusha
 	ldx     #$00
 	lda     _temp1
 	clc
 	adc     #$0E
-	bcc     L003E
+	bcc     L003C
 	inx
-L003E:	ora     #$20
+L003C:	ora     #$20
 	pha
 	txa
 	ora     #$02
@@ -8149,20 +8086,20 @@ L003E:	ora     #$20
 ;
 	lda     _controller
 	and     #$80
-	beq     L00A1
+	beq     L009D
 	lda     _prevController
 	and     #$80
-	beq     L00A4
-L00A1:	lda     _controller
+	beq     L00A0
+L009D:	lda     _controller
 	and     #$10
-	beq     L00A5
+	beq     L00A1
 	lda     _prevController
 	and     #$10
-	bne     L00A5
+	bne     L00A1
 ;
 ; tempShort0 = (customSeed >> ((3 - temp1) << 2));
 ;
-L00A4:	lda     #$03
+L00A0:	lda     #$03
 	sec
 	sbc     _temp1
 	asl     a
@@ -8177,18 +8114,18 @@ L00A4:	lda     #$03
 ; ++tempShort0;
 ;
 	inc     _tempShort0
-	bne     L00EE
+	bne     L00E9
 	inc     _tempShort0+1
 ;
 ; } else if(BUTTON_DOWN(PAD_B)) {
 ;
-	jmp     L00EE
-L00A5:	lda     _controller
+	jmp     L00E9
+L00A1:	lda     _controller
 	and     #$40
-	jeq     L0046
+	jeq     L0044
 	lda     _prevController
 	and     #$40
-	bne     L0046
+	bne     L0044
 ;
 ; tempShort0 = (customSeed >> ((3 - temp1) << 2));
 ;
@@ -8207,14 +8144,14 @@ L00A5:	lda     _controller
 ; --tempShort0;
 ;
 	ldx     _tempShort0
-	bne     L004A
+	bne     L0048
 	dec     _tempShort0+1
-L004A:	dex
+L0048:	dex
 	stx     _tempShort0
 ;
 ; tempShort0 &= 0b1111;
 ;
-L00EE:	lda     _tempShort0
+L00E9:	lda     _tempShort0
 	ldx     #$00
 	and     #$0F
 	sta     _tempShort0
@@ -8267,21 +8204,21 @@ L00EE:	lda     _tempShort0
 ;
 ; if(customSeed == 0xCB58 && BUTTON_DOWN(PAD_SELECT) && !IS_GAME_CHEATS()) {
 ;
-L0046:	lda     _customSeed+1
+L0044:	lda     _customSeed+1
 	cmp     #$CB
-	jne     L00C0
+	jne     L00BC
 	lda     _customSeed
 	cmp     #$58
-	jne     L00C0
+	jne     L00BC
 	lda     _controller
 	and     #$20
-	jeq     L00C0
+	jeq     L00BC
 	lda     _prevController
 	and     #$20
-	jne     L00C0
+	jne     L00BC
 	lda     _gameMode
 	and     #$10
-	jne     L00C0
+	jne     L00BC
 ;
 ; gameMode |= (0b1u << 4);
 ;
@@ -8379,11 +8316,11 @@ L0046:	lda     _customSeed+1
 ;
 ; } else {
 ;
-	jmp     L00C0
+	jmp     L00BC
 ;
 ; one_vram_buffer(0x0E, NTADR_A(3, 12));
 ;
-L00AC:	lda     #$0E
+L00A8:	lda     #$0E
 	jsr     pusha
 	ldx     #$21
 	lda     #$83
@@ -8401,75 +8338,75 @@ L00AC:	lda     #$0E
 ;
 	lda     _controller
 	and     #$01
-	beq     L00AD
+	beq     L00A9
 	lda     _prevController
 	and     #$01
-	beq     L00B0
-L00AD:	lda     _controller
+	beq     L00AC
+L00A9:	lda     _controller
 	and     #$04
-	beq     L00B1
+	beq     L00AD
 	lda     _prevController
 	and     #$04
-	bne     L00B1
-L00B0:	lda     #$01
+	bne     L00AD
+L00AC:	lda     #$01
 ;
 ; else if(BUTTON_DOWN(PAD_LEFT) || BUTTON_DOWN(PAD_UP)) isNumberArrowUp = FALSE;
 ;
-	jmp     L0076
-L00B1:	lda     _controller
+	jmp     L0075
+L00AD:	lda     _controller
 	and     #$02
+	beq     L00AE
+	lda     _prevController
+	and     #$02
+	beq     L0075
+L00AE:	lda     _controller
+	and     #$08
 	beq     L00B2
 	lda     _prevController
-	and     #$02
-	beq     L0076
-L00B2:	lda     _controller
 	and     #$08
-	beq     L00B6
-	lda     _prevController
-	and     #$08
-	bne     L00B6
-L0076:	sta     _isNumberArrowUp
+	bne     L00B2
+L0075:	sta     _isNumberArrowUp
 ;
 ; gameSelectShouldUseArrow[3] = TRUE;
 ;
-L00B6:	lda     #$01
+L00B2:	lda     #$01
 	sta     _gameSelectShouldUseArrow+3
 ;
 ; if(BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START)) {
 ;
 	lda     _controller
 	and     #$80
-	beq     L00B7
+	beq     L00B3
 	lda     _prevController
 	and     #$80
-	beq     L00BA
-L00B7:	lda     _controller
+	beq     L00B6
+L00B3:	lda     _controller
 	and     #$10
-	jeq     L00C0
+	jeq     L00BC
 	lda     _prevController
 	and     #$10
-	jne     L00C0
+	jne     L00BC
 ;
 ; switch(selectionArrowIndex) {
 ;
-L00BA:	lda     _selectionArrowIndex
+L00B6:	lda     _selectionArrowIndex
 ;
 ; }
 ;
-	beq     L0063
+	beq     L0061
 	cmp     #$01
-	beq     L0064
+	beq     L0062
 	cmp     #$03
-	beq     L00BB
+	beq     L00B7
 	cmp     #$04
-	jeq     L00BC
+	jeq     L00B8
 	cmp     #$05
-	jeq     L0067
-	jmp     L00C0
+	jeq     L0065
+	jmp     L00BC
 ;
 ; setToEasyMode();
 ;
-L0063:	jsr     _setToEasyMode
+L0061:	jsr     _setToEasyMode
 ;
 ; one_vram_buffer(OPENING_BRACKET, NTADR_A(3, 8));
 ;
@@ -8505,11 +8442,11 @@ L0063:	jsr     _setToEasyMode
 ;
 ; break;
 ;
-	jmp     L00C0
+	jmp     L00BC
 ;
 ; setToHardMode();
 ;
-L0064:	jsr     _setToHardMode
+L0062:	jsr     _setToHardMode
 ;
 ; one_vram_buffer(OPENING_BRACKET, NTADR_A(10, 8));
 ;
@@ -8545,11 +8482,11 @@ L0064:	jsr     _setToHardMode
 ;
 ; break;
 ;
-	jmp     L00C0
+	jmp     L00BC
 ;
 ; gameSelectShouldUseArrow[3] = FALSE;
 ;
-L00BB:	lda     #$00
+L00B7:	lda     #$00
 	sta     _gameSelectShouldUseArrow+3
 ;
 ; temp1 = 0;
@@ -8594,11 +8531,11 @@ L00BB:	lda     #$00
 ;
 ; break;
 ;
-	jmp     L00C0
+	jmp     L00BC
 ;
 ; isCustomSeed = FALSE;
 ;
-L00BC:	lda     #$00
+L00B8:	lda     #$00
 	sta     _isCustomSeed
 ;
 ; one_vram_buffer(OPENING_BRACKET, NTADR_A(9, 16));
@@ -8635,23 +8572,23 @@ L00BC:	lda     #$00
 ;
 ; break;
 ;
-	jmp     L00C0
+	jmp     L00BC
 ;
 ; if(customSeed == 0 && !IS_GAME_CHEATS()) isCustomSeed = FALSE; //seed of 0 messes things up so don't let it happen
 ;
-L0067:	lda     _customSeed
+L0065:	lda     _customSeed
 	ora     _customSeed+1
-	bne     L006B
+	bne     L0069
 	lda     _gameMode
 	and     #$10
-	beq     L00BD
-L006B:	lda     #$00
-	jmp     L00BF
-L00BD:	sta     _isCustomSeed
+	beq     L00B9
+L0069:	lda     #$00
+	jmp     L00BB
+L00B9:	sta     _isCustomSeed
 ;
 ; music_play(GAME_START_MUSIC);
 ;
-L00BF:	jsr     _music_play
+L00BB:	jsr     _music_play
 ;
 ; one_vram_buffer(0x16, PALETTE_MEMORY_BEGIN);
 ;
@@ -8684,12 +8621,12 @@ L00BF:	jsr     _music_play
 ;
 ; if(BUTTON_DOWN(PAD_SELECT)) { 
 ;
-L00C0:	lda     _controller
+L00BC:	lda     _controller
 	and     #$20
-	beq     L006F
+	beq     L006D
 	lda     _prevController
 	and     #$20
-	bne     L006F
+	bne     L006D
 ;
 ; sfx_play(SFX_SELECT, 0);
 ;
@@ -8698,11 +8635,11 @@ L00C0:	lda     _controller
 ;
 ; goto startGame;
 ;
-	jmp     L0067
+	jmp     L0065
 ;
 ; updateSelectionArrow(); //done last because otherwise it messed with the number arrow
 ;
-L006F:	jmp     _updateSelectionArrow
+L006D:	jmp     _updateSelectionArrow
 
 .segment	"RODATA"
 

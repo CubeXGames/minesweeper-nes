@@ -272,51 +272,39 @@ inline void setTileIsFlag(uchar value) {
 
 #pragma region Printing
 
-//uses temp0, temp2 = number in place value, also deletes x - x + 3 tiles regardless of whatever they are, relatively slow
+//uses temp2 = number in place value, also deletes x -> x + 3 tiles regardless of whatever they are, relatively slow
 void printNumber(uchar number, uchar x, uchar y) {
 
-    uchar offset = 0; //also for if the number's begun in bit 7 (save a stack variable)
-    temp2 = 0;
+    uchar offset = 0;
+    multi_vram_buffer_horz_fill(BLANK_TILE, 3, NTADR_A(x, y));
 
     if(number >= 100) {
 
+        temp2 = 0;
         while(number >= 100) {
 
-            number -= 100;
             ++temp2;
+            number -= 100;
         }
 
-        one_vram_buffer(temp2 + NUMBER_TO_TILE, NTADR_A(x, y));
-        ++temp0;
-        offset += 0b10000001;
+        one_vram_buffer(NUMBER_TO_TILE + temp2, NTADR_A(x, y));
+        ++offset;
     }
 
-    temp2 = 0;
-    if(number >= 10) {
+    if(number >= 10 || offset == 1) {
 
+        temp2 = 0;
         while(number >= 10) {
 
-            number -= 10;
             ++temp2;
+            number -= 10;
         }
 
-        one_vram_buffer(temp2 + NUMBER_TO_TILE, NTADR_A(x + (offset & 0b11), y));
-        ++temp0;
-        offset++;
-    } else if(offset & 0b10000000) offset++;
-
-    offset &= ~(0b10000000); //clear the has number begun thingy
-    one_vram_buffer(number + NUMBER_TO_TILE, NTADR_A(x + offset, y));
-    ++temp0;
-
-    //overwrite any remaining tiles
-    ++offset;
-    while(offset < 3) {
-
-        one_vram_buffer(0x9, NTADR_A(x + offset, y));
+        one_vram_buffer(NUMBER_TO_TILE + temp2, NTADR_A(x + offset, y));
         ++offset;
-        ++temp0;
     }
+
+    one_vram_buffer(NUMBER_TO_TILE + number, NTADR_A(x + offset, y));
 }
 
 //uses temp2, for the seed
@@ -775,7 +763,7 @@ void endGameA(uchar emphasis) {
     }
     
     printHexNumber(boardSeed, 11, 18);
-    one_vram_buffer(OPENING_BRACKET, NTADR_A(16, 18));
+    one_vram_buffer(0xA, NTADR_A(16, 18)); //put down the flag
 }
 
 void endGameB(void) {
@@ -800,8 +788,6 @@ void endGameB(void) {
     if(numMines < 10) temp1 = 1;
     else if(numMines < 100) temp1 = 2;
     else temp1 = 3;
-
-    one_vram_buffer(CLOSING_BRACKET, NTADR_A(17 + temp1, 18));
 
     delay(60);
 
@@ -1765,14 +1751,22 @@ void updateGameSelection(void) {
             one_vram_buffer(0x0F, NTADR_A(4, 12));
 
             if(temp0 && numMines < maxMines) ++numMines;
-            if(temp1 && numMines <= (maxMines - 10)) numMines += 10;
+            if(temp1) {
+                
+                if(numMines <= (maxMines - 10)) numMines += 10;
+                else numMines = maxMines;
+            }
         } else {
 
             one_vram_buffer(0x0E, NTADR_A(3, 12));
             one_vram_buffer(0x1F, NTADR_A(4, 12));
 
             if(temp0 && numMines > minMines) --numMines;
-            if(temp1 && numMines >= (minMines + 10)) numMines -= 10;
+            if(temp1) {
+                
+                if(numMines >= (minMines + 10)) numMines -= 10;
+                else numMines = minMines;
+            }
         }
 
         if(temp0 || temp1) sfx_play(SFX_SELECT, 0);

@@ -32,13 +32,13 @@ typedef union {
 #define HARD_MAX_X 32
 #define HARD_MAX_Y 23
 #define HARD_NUM_MINES 150
-#define HARD_MAX_MINES 225
+#define HARD_MAX_MINES 250
 #define HARD_MIN_MINES 100
 
 #define EASY_MAX_X 16
 #define EASY_MAX_Y 11
-#define EASY_NUM_MINES 35
-#define EASY_MAX_MINES 100
+#define EASY_NUM_MINES 40
+#define EASY_MAX_MINES 110
 #define EASY_MIN_MINES 25
 
 //32 by 23 memory size (to make memory aligned better) for hard mode, 1 bit per tile, = 32 * 23 / 8 = 92
@@ -50,7 +50,8 @@ typedef union {
 #define BLANK_TILE 0x9
 
 #define FILL_STACK_SIZE 0x40
-//doesn't shake the screen
+
+//usually doesn't shake the screen
 #define MAX_SCREEN_UPDATES_PER_FRAME 0x20
 
 #define ATTRIBUTE_TABLE_SIZE 0x40
