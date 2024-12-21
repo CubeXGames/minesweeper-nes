@@ -21,6 +21,10 @@
 	.import		_oam_clear
 	.import		_oam_spr
 	.import		_oam_meta_spr
+	.import		_music_play
+	.import		_music_stop
+	.import		_sfx_play
+	.import		_sample_play
 	.import		_pad_poll
 	.import		_bank_spr
 	.import		_vram_adr
@@ -34,12 +38,15 @@
 	.import		_multi_vram_buffer_horz_fill
 	.import		_clear_vram_buffer
 	.import		_pal_fade_to
+	.import		_flush_vram_update2
 	.import		_color_emphasis
 	.export		_titleScreenNametable
 	.export		_selectScreenNametable
 	.export		_gameEndScreenNametable
 	.export		_countMinesAroundTile
 	.export		_activateTileNoCount
+	.export		_updateSelectionArrow
+	.export		_newGame
 	.export		_temp0
 	.export		_temp1
 	.export		_temp2
@@ -98,9 +105,10 @@
 	.export		_sprPalette
 	.export		_easySelectorMetasprite
 	.export		_pausedText
-	.export		_leaveText
-	.export		_newGameText
 	.export		_backText
+	.export		_newGameText
+	.export		_leaveText
+	.export		_winText
 	.export		_pressStartText
 	.export		_youWonText
 	.export		_gameOverText
@@ -110,6 +118,9 @@
 	.export		_gameSelectPositionsX
 	.export		_gameSelectPositionsY
 	.export		_gameSelectShouldUseArrow
+	.export		_gameEndScreenPositionsX
+	.export		_gameEndScreenPositionsY
+	.export		_gameEndScreenShouldUseArrow
 	.export		_showTitleScreen
 	.export		_updateRNGNoController
 	.export		_getTileBase
@@ -119,6 +130,7 @@
 	.export		_printTime
 	.export		_printString
 	.export		_printTile
+	.export		_printTileVramBuffer
 	.export		_clearScreen
 	.export		_checkAdjacentTiles
 	.export		_pushCursorXY
@@ -129,9 +141,13 @@
 	.export		_changeAttributeTable
 	.export		_activateTileBase
 	.export		_activateTile
+	.export		_endGameA
+	.export		_endGameB
+	.export		_winGame
+	.export		_loseGame
+	.export		_updateGameEnd
 	.export		_generateBoard
 	.export		_displayBoard
-	.export		_updateSelectionArrow
 	.export		_showSelectScreen
 	.export		_loadSelectScreen
 	.export		_updateTitleScreen
@@ -425,7 +441,7 @@ _titleScreenNametable:
 	.byte	$FE
 	.byte	$09
 	.byte	$02
-	.byte	$4C
+	.byte	$2C
 	.byte	$5B
 	.byte	$09
 	.byte	$43
@@ -440,7 +456,7 @@ _titleScreenNametable:
 	.byte	$35
 	.byte	$09
 	.byte	$02
-	.byte	$32
+	.byte	$52
 	.byte	$AA
 	.byte	$02
 	.byte	$0F
@@ -453,14 +469,14 @@ _titleScreenNametable:
 	.byte	$01
 	.byte	$00
 	.byte	$02
-	.byte	$11
-	.byte	$05
+	.byte	$09
+	.byte	$50
 	.byte	$02
 	.byte	$02
-	.byte	$01
+	.byte	$10
 	.byte	$00
 	.byte	$02
-	.byte	$03
+	.byte	$0B
 	.byte	$02
 	.byte	$00
 _selectScreenNametable:
@@ -468,17 +484,34 @@ _selectScreenNametable:
 	.byte	$09
 	.byte	$00
 	.byte	$41
-	.byte	$4E
-	.byte	$45
-	.byte	$57
-	.byte	$09
-	.byte	$47
-	.byte	$41
-	.byte	$4D
-	.byte	$45
+	.byte	$E0
+	.byte	$E1
+	.byte	$E2
+	.byte	$E3
+	.byte	$E4
+	.byte	$E5
+	.byte	$E6
+	.byte	$E7
+	.byte	$E8
+	.byte	$E9
+	.byte	$EA
 	.byte	$09
 	.byte	$00
-	.byte	$77
+	.byte	$14
+	.byte	$F0
+	.byte	$F1
+	.byte	$F2
+	.byte	$F3
+	.byte	$F4
+	.byte	$F5
+	.byte	$F6
+	.byte	$F7
+	.byte	$F8
+	.byte	$F9
+	.byte	$FA
+	.byte	$09
+	.byte	$00
+	.byte	$54
 	.byte	$47
 	.byte	$41
 	.byte	$4D
@@ -517,13 +550,7 @@ _selectScreenNametable:
 	.byte	$44
 	.byte	$09
 	.byte	$00
-	.byte	$04
-	.byte	$61
-	.byte	$00
-	.byte	$04
-	.byte	$09
-	.byte	$00
-	.byte	$28
+	.byte	$32
 	.byte	$4E
 	.byte	$55
 	.byte	$4D
@@ -648,8 +675,11 @@ _gameEndScreenNametable:
 	.byte	$45
 	.byte	$2D
 	.byte	$09
-	.byte	$01
-	.byte	$05
+	.byte	$09
+	.byte	$C4
+	.byte	$C5
+	.byte	$09
+	.byte	$09
 	.byte	$13
 	.byte	$09
 	.byte	$01
@@ -657,7 +687,11 @@ _gameEndScreenNametable:
 	.byte	$13
 	.byte	$09
 	.byte	$01
-	.byte	$0B
+	.byte	$07
+	.byte	$D4
+	.byte	$D5
+	.byte	$09
+	.byte	$09
 	.byte	$13
 	.byte	$09
 	.byte	$01
@@ -765,12 +799,20 @@ _gameEndScreenNametable:
 	.byte	$C8
 	.byte	$00
 	.byte	$01
-	.byte	$3F
+	.byte	$1B
+	.byte	$40
+	.byte	$00
+	.byte	$01
+	.byte	$06
+	.byte	$08
+	.byte	$00
+	.byte	$01
+	.byte	$1A
 	.byte	$01
 	.byte	$00
 _gameBgPalette:
 	.byte	$09
-	.byte	$1A
+	.byte	$1B
 	.byte	$0F
 	.byte	$30
 	.byte	$09
@@ -813,7 +855,7 @@ _gameEndPalette:
 	.byte	$30
 	.byte	$09
 	.byte	$22
-	.byte	$27
+	.byte	$28
 	.byte	$13
 	.byte	$09
 	.byte	$08
@@ -856,12 +898,14 @@ _easySelectorMetasprite:
 	.byte	$80
 _pausedText:
 	.byte	$50,$41,$55,$53,$45,$44
-_leaveText:
-	.byte	$45,$58,$49,$54
+_backText:
+	.byte	$42,$41,$43,$4B
 _newGameText:
 	.byte	$4E,$45,$57,$09,$47,$41,$4D,$45
-_backText:
-	.byte	$42,$41,$43,$4B,$09,$54,$4F,$09,$47,$41,$4D,$45
+_leaveText:
+	.byte	$45,$58,$49,$54
+_winText:
+	.byte	$57,$49,$4E
 _pressStartText:
 	.byte	$50,$52,$45,$53,$53,$09,$53,$54,$41,$52,$54
 _youWonText:
@@ -869,14 +913,17 @@ _youWonText:
 _gameOverText:
 	.byte	$47,$41,$4D,$45,$09,$4F,$56,$45,$52,$21
 _gamePauseMenuPositionsX:
-	.byte	$60
-	.byte	$60
-	.byte	$D0
+	.byte	$78
+	.byte	$78
+	.byte	$C8
+	.byte	$C8
 _gamePauseMenuPositionsY:
-	.byte	$0E
 	.byte	$16
-	.byte	$0E
+	.byte	$1E
+	.byte	$16
+	.byte	$1E
 _gamePauseMenuShouldUseArrow:
+	.byte	$01
 	.byte	$01
 	.byte	$01
 	.byte	$01
@@ -891,9 +938,18 @@ _gameSelectPositionsY:
 	.byte	$3E
 	.byte	$3E
 	.byte	$5E
-	.byte	$7E
-	.byte	$7E
+	.byte	$7F
+	.byte	$7F
 	.byte	$8E
+_gameEndScreenPositionsX:
+	.byte	$58
+	.byte	$58
+_gameEndScreenPositionsY:
+	.byte	$9E
+	.byte	$A6
+_gameEndScreenShouldUseArrow:
+	.byte	$01
+	.byte	$01
 
 .segment	"BSS"
 
@@ -962,11 +1018,11 @@ _checkAdjacentTilesFunction:
 _selectionSprite:
 	.res	4,$00
 _boardIsMine:
-	.res	104,$00
+	.res	92,$00
 _boardIsActivated:
-	.res	104,$00
+	.res	92,$00
 _boardIsFlag:
-	.res	104,$00
+	.res	92,$00
 _fillStackX:
 	.res	64,$00
 _fillStackY:
@@ -1071,6 +1127,407 @@ L0006:	lda     #$01
 ; activateTileBase();
 ;
 	jmp     _activateTileBase
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ updateSelectionArrow (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_updateSelectionArrow: near
+
+.segment	"CODE"
+
+;
+; temp4 = selectionArrowShouldUseArrow[selectionArrowIndex]; //the arrow shouldn't be able to be moved left to right when in this mode
+;
+	lda     _selectionArrowShouldUseArrow
+	ldx     _selectionArrowShouldUseArrow+1
+	ldy     _selectionArrowIndex
+	sta     ptr1
+	stx     ptr1+1
+	lda     (ptr1),y
+	sta     _temp4
+;
+; if(!temp3) {
+;
+	lda     _temp3
+	bne     L003E
+;
+; if(BUTTON_DOWN(PAD_DOWN) || (BUTTON_DOWN(PAD_RIGHT) && temp4)) {
+;
+	lda     _controller
+	and     #$04
+	beq     L002B
+	lda     _prevController
+	and     #$04
+	beq     L0033
+L002B:	lda     _controller
+	and     #$01
+	beq     L0035
+	lda     _prevController
+	and     #$01
+	bne     L0035
+	lda     _temp4
+	beq     L0035
+;
+; ++selectionArrowIndex;
+;
+L0033:	inc     _selectionArrowIndex
+;
+; if(selectionArrowIndex == selectionArrowNumIndices) selectionArrowIndex = 0;
+;
+	lda     _selectionArrowIndex
+	cmp     _selectionArrowNumIndices
+	bne     L0045
+	lda     #$00
+	sta     _selectionArrowIndex
+;
+; } else if(BUTTON_DOWN(PAD_UP) || (BUTTON_DOWN(PAD_LEFT) && temp4)) {
+;
+	jmp     L0046
+L0035:	lda     _controller
+	and     #$08
+	beq     L0036
+	lda     _prevController
+	and     #$08
+	beq     L003D
+L0036:	lda     _controller
+	and     #$02
+	beq     L003F
+	lda     _prevController
+	and     #$02
+	bne     L003E
+	lda     _temp4
+	beq     L003F
+;
+; __asm__("ldx %v", selectionArrowIndex);
+;
+L003D:	ldx     _selectionArrowIndex
+;
+; __asm__("dex");
+;
+	dex
+;
+; __asm__("bpl @dontUnderflow");
+;
+	bpl     @dontUnderflow
+;
+; __asm__("lda %v", selectionArrowNumIndices);
+;
+	ldx     _selectionArrowNumIndices
+;
+; __asm__("dex");
+;
+	dex
+;
+; __asm__("stx %v", selectionArrowIndex);
+;
+@dontUnderflow:
+	stx     _selectionArrowIndex
+;
+; sfx_play(SFX_SELECT, 0);
+;
+L0045:	lda     #$00
+L0046:	jsr     pusha
+	jsr     _sfx_play
+;
+; temp3 = FALSE;
+;
+L003E:	lda     #$00
+L003F:	sta     _temp3
+;
+; oam_clear();
+;
+	jsr     _oam_clear
+;
+; if(selectionArrowShouldUseArrow[selectionArrowIndex]) {
+;
+	lda     _selectionArrowShouldUseArrow
+	ldx     _selectionArrowShouldUseArrow+1
+	ldy     _selectionArrowIndex
+	sta     ptr1
+	stx     ptr1+1
+	lda     (ptr1),y
+	bne     L0047
+;
+; }
+;
+	rts
+;
+; selectionArrowTargetPosX = selectionArrowPositionsX[selectionArrowIndex];
+;
+L0047:	lda     _selectionArrowPositionsX
+	ldx     _selectionArrowPositionsX+1
+	ldy     _selectionArrowIndex
+	sta     ptr1
+	stx     ptr1+1
+	lda     (ptr1),y
+	sta     _selectionArrowTargetPosX
+;
+; selectionArrowTargetPosY = selectionArrowPositionsY[selectionArrowIndex];
+;
+	lda     _selectionArrowPositionsY
+	ldx     _selectionArrowPositionsY+1
+	ldy     _selectionArrowIndex
+	sta     ptr1
+	stx     ptr1+1
+	lda     (ptr1),y
+	sta     _selectionArrowTargetPosY
+;
+; temp4 = selectionArrowTargetPosY - selectionArrow.yPos;
+;
+	sec
+	sbc     _selectionArrow
+	sta     _temp4
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = temp4; //save it
+;
+	ldy     _fillStackPos
+	lda     _temp4
+	sta     _fillStackX,y
+;
+; temp4 >>= 1; //divide by 2 to make a smooth effect (the important part)
+;
+	lsr     a
+	sta     _temp4
+;
+; if(temp4 & (0b1 << 6)) { //if negative, bit 6 instead of 7 because temp4 was just bitshifted by 1 (div by 2)
+;
+	and     #$40
+	beq     L0040
+;
+; --temp4; //make temp4 negative if it was a 7 bit number, kinda weird but whatever
+;
+	dec     _temp4
+;
+; temp4 ^= 0b01111111;
+;
+	lda     _temp4
+	eor     #$7F
+	sta     _temp4
+;
+; selectionArrow.yPos -= temp4;
+;
+	eor     #$FF
+	sec
+	adc     _selectionArrow
+	sta     _selectionArrow
+;
+; if(fillStackX[fillStackPos] == 1) --selectionArrow.yPos;
+;
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	cmp     #$01
+	bne     L0041
+	dec     _selectionArrow
+;
+; } else {
+;
+	jmp     L0041
+;
+; selectionArrow.yPos += temp4;
+;
+L0040:	lda     _temp4
+	clc
+	adc     _selectionArrow
+	sta     _selectionArrow
+;
+; if(fillStackX[fillStackPos] == 0b11111111) ++selectionArrow.yPos;
+;
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	cmp     #$FF
+	bne     L0041
+	inc     _selectionArrow
+;
+; temp4 = selectionArrowTargetPosX - selectionArrow.xPos;
+;
+L0041:	lda     _selectionArrowTargetPosX
+	sec
+	sbc     _selectionArrow+3
+	sta     _temp4
+;
+; fillStackX[fillStackPos] = temp4; //save it
+;
+	ldy     _fillStackPos
+	lda     _temp4
+	sta     _fillStackX,y
+;
+; temp4 >>= 1; //divide by 2 to make a smooth effect
+;
+	lsr     a
+	sta     _temp4
+;
+; if(temp4 & (0b1 << 6)) { //checks if temp4 is negative, bit 6 instead of 7 because temp4 was just bitshifted by 1 (div by 2)
+;
+	and     #$40
+	beq     L0042
+;
+; --temp4; //make temp4 negative, 2's complement style (but treat it as a 7 bit number per above)
+;
+	dec     _temp4
+;
+; temp4 ^= 0b01111111;
+;
+	lda     _temp4
+	eor     #$7F
+	sta     _temp4
+;
+; selectionArrow.xPos -= temp4;
+;
+	eor     #$FF
+	sec
+	adc     _selectionArrow+3
+	sta     _selectionArrow+3
+;
+; if(fillStackX[fillStackPos] == 1) --selectionArrow.xPos;
+;
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	cmp     #$01
+	bne     L0043
+	dec     _selectionArrow+3
+;
+; } else {
+;
+	jmp     L0043
+;
+; selectionArrow.xPos += temp4;
+;
+L0042:	lda     _temp4
+	clc
+	adc     _selectionArrow+3
+	sta     _selectionArrow+3
+;
+; if(fillStackX[fillStackPos] == 0b11111111) ++selectionArrow.xPos;
+;
+	ldy     _fillStackPos
+	lda     _fillStackX,y
+	cmp     #$FF
+	bne     L0043
+	inc     _selectionArrow+3
+;
+; --fillStackPos;
+;
+L0043:	dec     _fillStackPos
+;
+; oam_spr(selectionArrow.xPos, selectionArrow.yPos, selectionArrow.tile, selectionArrow.attributes);
+;
+	jsr     decsp3
+	lda     _selectionArrow+3
+	ldy     #$02
+	sta     (sp),y
+	lda     _selectionArrow
+	dey
+	sta     (sp),y
+	lda     _selectionArrow+1
+	dey
+	sta     (sp),y
+	lda     _selectionArrow+2
+	jmp     _oam_spr
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ newGame (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_newGame: near
+
+.segment	"CODE"
+
+;
+; ppu_off();
+;
+	jsr     _ppu_off
+;
+; music_stop();
+;
+	jsr     _music_stop
+;
+; pal_bright(4);
+;
+	lda     #$04
+	jsr     _pal_bright
+;
+; clear_vram_buffer(); //clear any pending vram updates...
+;
+	jsr     _clear_vram_buffer
+;
+; oam_clear(); //...and any remaining sprites
+;
+	jsr     _oam_clear
+;
+; gameMode &= ~(0b1 << 5); //set game not paused (for if pressed from the pause menu)
+;
+	lda     _gameMode
+	and     #$DF
+	sta     _gameMode
+;
+; gameMode &= ~(0b111);
+;
+	and     #$F8
+	sta     _gameMode
+;
+; gameMode |= 0b001; //set the gamemode to playing a game (gamemode 1)
+;
+	ora     #$01
+	sta     _gameMode
+;
+; cursorX = 0;
+;
+	lda     #$00
+	sta     _cursorX
+;
+; cursorY = 0;
+;
+	sta     _cursorY
+;
+; fillStackPos = 0;
+;
+	sta     _fillStackPos
+;
+; frameCount = 0;
+;
+	sta     _frameCount
+;
+; selectionArrowIndex = 0;
+;
+	sta     _selectionArrowIndex
+;
+; secondsFrameCount = 0;
+;
+	sta     _secondsFrameCount
+;
+; timePlayedSeconds = 0;
+;
+	sta     _timePlayedSeconds
+;
+; timePlayedMinutes = 0;
+;
+	sta     _timePlayedMinutes
+;
+; generateBoard();
+;
+	jsr     _generateBoard
+;
+; displayBoard();
+;
+	jsr     _displayBoard
+;
+; music_play(GAME_NORMAL_MUSIC);
+;
+	lda     #$01
+	jmp     _music_play
 
 .endproc
 
@@ -2511,6 +2968,99 @@ L0003:	jsr     _vram_adr
 .endproc
 
 ; ---------------------------------------------------------------
+; void __near__ printTileVramBuffer (unsigned char tileStart, int address)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_printTileVramBuffer: near
+
+.segment	"CODE"
+
+;
+; void printTileVramBuffer(uchar tileStart, int address) {
+;
+	jsr     pushax
+;
+; one_vram_buffer(tileStart, address);
+;
+	ldy     #$02
+	lda     (sp),y
+	jsr     pusha
+	ldy     #$02
+	lda     (sp),y
+	tax
+	dey
+	lda     (sp),y
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(tileStart + 1, address + 1);
+;
+	ldy     #$02
+	lda     (sp),y
+	clc
+	adc     #$01
+	jsr     pusha
+	ldy     #$02
+	lda     (sp),y
+	tax
+	dey
+	lda     (sp),y
+	clc
+	adc     #$01
+	bcc     L0003
+	inx
+L0003:	jsr     _one_vram_buffer
+;
+; address += 0x20;
+;
+	ldx     #$00
+	lda     #$20
+	jsr     addeq0sp
+;
+; tileStart += 0x10;
+;
+	ldy     #$02
+	clc
+	lda     #$10
+	adc     (sp),y
+	sta     (sp),y
+;
+; one_vram_buffer(tileStart, address);
+;
+	jsr     pusha
+	ldy     #$02
+	lda     (sp),y
+	tax
+	dey
+	lda     (sp),y
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(tileStart + 1, address + 1);
+;
+	ldy     #$02
+	lda     (sp),y
+	clc
+	adc     #$01
+	jsr     pusha
+	ldy     #$02
+	lda     (sp),y
+	tax
+	dey
+	lda     (sp),y
+	clc
+	adc     #$01
+	bcc     L0005
+	inx
+L0005:	jsr     _one_vram_buffer
+;
+; }
+;
+	jmp     incsp3
+
+.endproc
+
+; ---------------------------------------------------------------
 ; void __near__ clearScreen (unsigned char length, unsigned char x, unsigned char y)
 ; ---------------------------------------------------------------
 
@@ -3208,6 +3758,10 @@ L0002:	jmp     _pushCursorXY
 ;
 	jsr     pusha
 ;
+; ++cursorY;
+;
+	inc     _cursorY
+;
 ; ++fillStackPos;
 ;
 	inc     _fillStackPos
@@ -3361,6 +3915,10 @@ L000E:	asl     a
 ;
 	dec     _fillStackPos
 ;
+; --cursorY;
+;
+	dec     _cursorY
+;
 ; }
 ;
 	jmp     incsp1
@@ -3382,7 +3940,7 @@ L000E:	asl     a
 ;
 	lda     _temp0
 	cmp     #$20
-	bcc     L0021
+	bcc     L0022
 ;
 ; ppu_wait_nmi();
 ;
@@ -3395,18 +3953,18 @@ L000E:	asl     a
 ;
 ; if(IS_GAME_HARD()) {
 ;
-L0021:	lda     _gameMode
+L0022:	lda     _gameMode
 	and     #$08
-	beq     L0022
+	beq     L0023
 ;
-; one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 4));
+; one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 5));
 ;
 	lda     _temp2
 	jsr     pusha
 	ldx     #$00
 	lda     _cursorY
 	clc
-	adc     #$04
+	adc     #$05
 	bcc     L0004
 	inx
 L0004:	jsr     aslax4
@@ -3429,19 +3987,19 @@ L0004:	jsr     aslax4
 ;
 ; } else {
 ;
-	jmp     L0011
+	jmp     L0025
 ;
 ; if(temp2 == 8) temp2 = 0x10; //quick hack to get 8-tiles to work properly (they're rare though, so doesn't really matter)
 ;
-L0022:	lda     _temp2
+L0023:	lda     _temp2
 	cmp     #$08
-	bne     L0023
+	bne     L0024
 	lda     #$10
 	sta     _temp2
 ;
-; one_vram_buffer(0x80 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 4));
+; one_vram_buffer(0x80 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 6));
 ;
-L0023:	lda     _temp2
+L0024:	lda     _temp2
 	asl     a
 	clc
 	adc     #$80
@@ -3449,10 +4007,10 @@ L0023:	lda     _temp2
 	ldx     #$00
 	lda     _cursorY
 	asl     a
-	bcc     L001B
+	bcc     L001C
 	inx
 	clc
-L001B:	adc     #$04
+L001C:	adc     #$06
 	bcc     L0008
 	inx
 L0008:	jsr     aslax4
@@ -3463,9 +4021,9 @@ L0008:	jsr     aslax4
 	ldx     #$00
 	lda     _cursorX
 	asl     a
-	bcc     L0014
+	bcc     L0015
 	inx
-L0014:	ora     ptr1
+L0015:	ora     ptr1
 	pha
 	txa
 	ora     tmp1
@@ -3478,7 +4036,7 @@ L0014:	ora     ptr1
 	pla
 	jsr     _one_vram_buffer
 ;
-; one_vram_buffer(0x81 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 4));
+; one_vram_buffer(0x81 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 6));
 ;
 	lda     _temp2
 	asl     a
@@ -3488,10 +4046,10 @@ L0014:	ora     ptr1
 	ldx     #$00
 	lda     _cursorY
 	asl     a
-	bcc     L001C
+	bcc     L001D
 	inx
 	clc
-L001C:	adc     #$04
+L001D:	adc     #$06
 	bcc     L000A
 	inx
 L000A:	jsr     aslax4
@@ -3502,10 +4060,10 @@ L000A:	jsr     aslax4
 	ldx     #$00
 	lda     _cursorX
 	asl     a
-	bcc     L001D
+	bcc     L001E
 	inx
 	clc
-L001D:	adc     #$01
+L001E:	adc     #$01
 	bcc     L000B
 	inx
 L000B:	ora     ptr1
@@ -3521,7 +4079,7 @@ L000B:	ora     ptr1
 	pla
 	jsr     _one_vram_buffer
 ;
-; one_vram_buffer(0x90 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 5));
+; one_vram_buffer(0x90 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 7));
 ;
 	lda     _temp2
 	asl     a
@@ -3531,10 +4089,10 @@ L000B:	ora     ptr1
 	ldx     #$00
 	lda     _cursorY
 	asl     a
-	bcc     L001E
+	bcc     L001F
 	inx
 	clc
-L001E:	adc     #$05
+L001F:	adc     #$07
 	bcc     L000D
 	inx
 L000D:	jsr     aslax4
@@ -3545,9 +4103,9 @@ L000D:	jsr     aslax4
 	ldx     #$00
 	lda     _cursorX
 	asl     a
-	bcc     L0018
+	bcc     L0019
 	inx
-L0018:	ora     ptr1
+L0019:	ora     ptr1
 	pha
 	txa
 	ora     tmp1
@@ -3560,7 +4118,7 @@ L0018:	ora     ptr1
 	pla
 	jsr     _one_vram_buffer
 ;
-; one_vram_buffer(0x91 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 5));
+; one_vram_buffer(0x91 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 7));
 ;
 	lda     _temp2
 	asl     a
@@ -3570,10 +4128,10 @@ L0018:	ora     ptr1
 	ldx     #$00
 	lda     _cursorY
 	asl     a
-	bcc     L001F
+	bcc     L0020
 	inx
 	clc
-L001F:	adc     #$05
+L0020:	adc     #$07
 	bcc     L000F
 	inx
 L000F:	jsr     aslax4
@@ -3584,10 +4142,10 @@ L000F:	jsr     aslax4
 	ldx     #$00
 	lda     _cursorX
 	asl     a
-	bcc     L0020
+	bcc     L0021
 	inx
 	clc
-L0020:	adc     #$01
+L0021:	adc     #$01
 	bcc     L0010
 	inx
 L0010:	ora     ptr1
@@ -3619,16 +4177,25 @@ L0010:	ora     ptr1
 ;
 	lda     _temp2
 	cmp     #$10
-	bne     L0011
+	bne     L0025
 	lda     #$08
 	sta     _temp2
 ;
+; if(!IS_BOARD_UPDATING()) sfx_play(SFX_TILE_SELECT, 1);
+;
+L0025:	lda     _gameMode
+	and     #$80
+	bne     L0012
+	lda     #$01
+	jsr     pusha
+	jsr     _sfx_play
+;
 ; --numTilesLeft;
 ;
-L0011:	ldx     _numTilesLeft
-	bne     L0012
+L0012:	ldx     _numTilesLeft
+	bne     L0013
 	dec     _numTilesLeft+1
-L0012:	dex
+L0013:	dex
 	stx     _numTilesLeft
 ;
 ; }
@@ -3794,14 +4361,14 @@ L0028:	lda     _gameMode
 	and     #$08
 	beq     L0029
 ;
-; one_vram_buffer(NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 4));
+; one_vram_buffer(NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 5));
 ;
 	lda     #$00
 	jsr     pusha
 	tax
 	lda     _cursorY
 	clc
-	adc     #$04
+	adc     #$05
 	bcc     L0011
 	inx
 L0011:	jsr     aslax4
@@ -3826,7 +4393,7 @@ L0011:	jsr     aslax4
 ;
 	jmp     L0012
 ;
-; one_vram_buffer(0x80, NTADR_A(cursorX << 1, (cursorY << 1) + 4));
+; one_vram_buffer(0x80, NTADR_A(cursorX << 1, (cursorY << 1) + 6));
 ;
 L0029:	lda     #$80
 	jsr     pusha
@@ -3836,7 +4403,7 @@ L0029:	lda     #$80
 	bcc     L0022
 	inx
 	clc
-L0022:	adc     #$04
+L0022:	adc     #$06
 	bcc     L0013
 	inx
 L0013:	jsr     aslax4
@@ -3862,7 +4429,7 @@ L001B:	ora     ptr1
 	pla
 	jsr     _one_vram_buffer
 ;
-; one_vram_buffer(0x81, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 4));
+; one_vram_buffer(0x81, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 6));
 ;
 	lda     #$81
 	jsr     pusha
@@ -3872,7 +4439,7 @@ L001B:	ora     ptr1
 	bcc     L0023
 	inx
 	clc
-L0023:	adc     #$04
+L0023:	adc     #$06
 	bcc     L0014
 	inx
 L0014:	jsr     aslax4
@@ -3902,7 +4469,7 @@ L0015:	ora     ptr1
 	pla
 	jsr     _one_vram_buffer
 ;
-; one_vram_buffer(0x90, NTADR_A(cursorX << 1, (cursorY << 1) + 5));
+; one_vram_buffer(0x90, NTADR_A(cursorX << 1, (cursorY << 1) + 7));
 ;
 	lda     #$90
 	jsr     pusha
@@ -3912,7 +4479,7 @@ L0015:	ora     ptr1
 	bcc     L0025
 	inx
 	clc
-L0025:	adc     #$05
+L0025:	adc     #$07
 	bcc     L0016
 	inx
 L0016:	jsr     aslax4
@@ -3938,7 +4505,7 @@ L001F:	ora     ptr1
 	pla
 	jsr     _one_vram_buffer
 ;
-; one_vram_buffer(0x91, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 5));
+; one_vram_buffer(0x91, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 7));
 ;
 	lda     #$91
 	jsr     pusha
@@ -3948,7 +4515,7 @@ L001F:	ora     ptr1
 	bcc     L0026
 	inx
 	clc
-L0026:	adc     #$05
+L0026:	adc     #$07
 	bcc     L0017
 	inx
 L0017:	jsr     aslax4
@@ -4023,875 +4590,45 @@ L002A:	lda     _fillStackPos
 .endproc
 
 ; ---------------------------------------------------------------
-; void __near__ gameUpdateDifficultyIndependent (void)
+; void __near__ endGameA (unsigned char emphasis)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
 
-.proc	_gameUpdateDifficultyIndependent: near
+.proc	_endGameA: near
 
 .segment	"CODE"
 
 ;
-; if(debugTemp0) {
+; void endGameA(uchar emphasis) {
 ;
-	lda     _debugTemp0
-	beq     L0064
-;
-; --debugTemp0;
-;
-	dec     _debugTemp0
-;
-; if(!debugTemp0) one_vram_buffer(0x09, PALETTE_MEMORY_BEGIN + 0x0); //make the screen normal again
-;
-	bne     L0064
-	lda     #$09
 	jsr     pusha
-	ldx     #$3F
-	lda     #$00
-	jsr     _one_vram_buffer
 ;
-; if(BUTTON_DOWN(PAD_RIGHT)) {
+; music_stop();
 ;
-L0064:	lda     _controller
-	and     #$01
-	beq     L0068
-	lda     _prevController
-	and     #$01
-	bne     L0068
+	jsr     _music_stop
 ;
-; __asm__("ldx %v", cursorX);
+; if(emphasis == COL_EMP_RED) sample_play(2); //if lost, play losing sound
 ;
-	ldx     _cursorX
-;
-; __asm__("inx");
-;
-	inx
-;
-; __asm__("cpx %v", boardWidth);
-;
-	cpx     _boardWidth
-;
-; __asm__("bne @padRightSkip");
-;
-	bne     @padRightSkip
-;
-; __asm__("ldx #$00");
-;
-	tax
-;
-; __asm__("stx %v", cursorX);
-;
-@padRightSkip:
-	stx     _cursorX
-;
-; if(BUTTON_DOWN(PAD_LEFT)) {
-;
-L0068:	lda     _controller
-	and     #$02
-	beq     L006C
-	lda     _prevController
-	and     #$02
-	bne     L006C
-;
-; __asm__("ldx %v", cursorX);
-;
-	ldx     _cursorX
-;
-; __asm__("dex");
-;
-	dex
-;
-; __asm__("bpl @padLeftSkip");
-;
-	bpl     @padLeftSkip
-;
-; __asm__("ldx %v", boardWidth);
-;
-	ldx     _boardWidth
-;
-; __asm__("dex");
-;
-	dex
-;
-; __asm__("stx %v", cursorX);
-;
-@padLeftSkip:
-	stx     _cursorX
-;
-; if(BUTTON_DOWN(PAD_DOWN)) {
-;
-L006C:	lda     _controller
-	and     #$04
-	beq     L0070
-	lda     _prevController
-	and     #$04
-	bne     L0070
-;
-; __asm__("ldx %v", cursorY);
-;
-	ldx     _cursorY
-;
-; __asm__("inx");
-;
-	inx
-;
-; __asm__("cpx %v", boardHeight);
-;
-	cpx     _boardHeight
-;
-; __asm__("bne @padDownSkip");
-;
-	bne     @padDownSkip
-;
-; __asm__("ldx #00");
-;
-	tax
-;
-; __asm__("stx %v", cursorY);
-;
-@padDownSkip:
-	stx     _cursorY
-;
-; if(BUTTON_DOWN(PAD_UP)) {
-;
-L0070:	lda     _controller
-	and     #$08
-	beq     L0074
-	lda     _prevController
-	and     #$08
-	bne     L0074
-;
-; __asm__("ldx %v", cursorY);
-;
-	ldx     _cursorY
-;
-; __asm__("dex");
-;
-	dex
-;
-; __asm__("bpl @padUpSkip");
-;
-	bpl     @padUpSkip
-;
-; __asm__("ldx %v", boardHeight);
-;
-	ldx     _boardHeight
-;
-; __asm__("dex");
-;
-	dex
-;
-; __asm__("stx %v", cursorY);
-;
-@padUpSkip:
-	stx     _cursorY
-;
-; if((frameCount & 0b11111) == 0) {
-;
-L0074:	lda     _frameCount
-	and     #$1F
-	bne     L0076
-;
-; if((frameCount & 0b111111) == 0) one_vram_buffer(WHITE, PALETTE_MEMORY_BEGIN + 0x11);
-;
-	lda     _frameCount
-	and     #$3F
-	bne     L0075
-	lda     #$30
-;
-; else one_vram_buffer(0x38, PALETTE_MEMORY_BEGIN + 0x11);
-;
-	jmp     L009A
-L0075:	lda     #$38
-L009A:	jsr     pusha
-	ldx     #$3F
-	lda     #$11
-	jsr     _one_vram_buffer
-;
-; if(BUTTON_DOWN(PAD_B) && !getTileIsActivated()) {
-;
-L0076:	lda     _controller
-	and     #$40
-	jeq     L007D
-	lda     _prevController
-	and     #$40
-	jne     L007D
-	jsr     _getTileIsActivated
-	tax
-	jne     L007D
-;
-; if(getTileIsFlag()) {
-;
-	jsr     _getTileIsFlag
-	tax
-	jeq     L007B
-;
-; ++numFlags;
-;
-	inc     _numFlags
-;
-; setTileIsFlag(FALSE);
-;
-	lda     #$00
-	jsr     _setTileIsFlag
-;
-; if(IS_GAME_HARD()) {
-;
-	lda     _gameMode
-	and     #$08
-	beq     L007A
-;
-; one_vram_buffer(0x9 + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 4));
-;
-	lda     _cursorX
-	and     #$01
-	jsr     pusha0
-	lda     _cursorY
-	and     #$01
-	jsr     tosxora0
-	asl     a
-	clc
-	adc     #$09
-	jsr     pusha
-	ldx     #$00
-	lda     _cursorY
-	clc
-	adc     #$04
-	bcc     L0020
-	inx
-L0020:	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	lda     _cursorX
-	ora     ptr1
-	pha
-	lda     tmp1
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; ++temp0;
-;
-	inc     _temp0
-;
-; } else {
-;
-	jmp     L002A
-;
-; temp1 = cursorX << 1;
-;
-L007A:	lda     _cursorX
-	asl     a
-	sta     _temp1
-;
-; temp3 = (cursorY << 1) + 4;
-;
-	lda     _cursorY
-	asl     a
-	clc
-	adc     #$04
-	sta     _temp3
-;
-; one_vram_buffer(0xA2, NTADR_A(temp1, temp3));
-;
-	lda     #$A2
-	jsr     pusha
-	ldx     #$00
-	lda     _temp3
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	lda     _temp1
-	ora     ptr1
-	pha
-	lda     tmp1
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; one_vram_buffer(0xA3, NTADR_A(temp1 + 1, temp3));
-;
-	lda     #$A3
-	jsr     pusha
-	ldx     #$00
-	lda     _temp3
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	lda     _temp1
-	clc
-	adc     #$01
-	bcc     L0023
-	inx
-L0023:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; ++temp3;
-;
-	inc     _temp3
-;
-; one_vram_buffer(0xB2, NTADR_A(temp1, temp3));
-;
-	lda     #$B2
-	jsr     pusha
-	ldx     #$00
-	lda     _temp3
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	lda     _temp1
-	ora     ptr1
-	pha
-	lda     tmp1
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; one_vram_buffer(0xB3, NTADR_A(temp1 + 1, temp3));
-;
-	lda     #$B3
-	jsr     pusha
-	ldx     #$00
-	lda     _temp3
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	lda     _temp1
-	clc
-	adc     #$01
-	bcc     L0024
-	inx
-L0024:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; changeAttributeTable(0b01);
-;
-	lda     #$01
-;
-; } else if(numFlags > 0) {
-;
-	jmp     L009C
-L007B:	lda     _numFlags
-	jeq     L002A
-;
-; --numFlags;
-;
-	dec     _numFlags
-;
-; setTileIsFlag(TRUE);
-;
-	lda     #$01
-	jsr     _setTileIsFlag
-;
-; gameMode |= (0b1 << 6); //set that a flag was put down
-;
-	lda     _gameMode
-	ora     #$40
-	sta     _gameMode
-;
-; if(IS_GAME_HARD()) {
-;
-	and     #$08
-	beq     L007C
-;
-; one_vram_buffer(0xA + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 4));
-;
-	lda     _cursorX
-	and     #$01
-	jsr     pusha0
-	lda     _cursorY
-	and     #$01
-	jsr     tosxora0
-	asl     a
-	clc
-	adc     #$0A
-	jsr     pusha
-	ldx     #$00
-	lda     _cursorY
-	clc
-	adc     #$04
-	bcc     L0029
-	inx
-L0029:	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	lda     _cursorX
-	ora     ptr1
-	pha
-	lda     tmp1
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; ++temp0;
-;
-	inc     _temp0
-;
-; } else {
-;
-	jmp     L002A
-;
-; temp1 = cursorX << 1;
-;
-L007C:	lda     _cursorX
-	asl     a
-	sta     _temp1
-;
-; temp3 = (cursorY << 1) + 4;
-;
-	lda     _cursorY
-	asl     a
-	clc
-	adc     #$04
-	sta     _temp3
-;
-; one_vram_buffer(0xA4, NTADR_A(temp1, temp3));
-;
-	lda     #$A4
-	jsr     pusha
-	ldx     #$00
-	lda     _temp3
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	lda     _temp1
-	ora     ptr1
-	pha
-	lda     tmp1
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; one_vram_buffer(0xA5, NTADR_A(temp1 + 1, temp3));
-;
-	lda     #$A5
-	jsr     pusha
-	ldx     #$00
-	lda     _temp3
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	lda     _temp1
-	clc
-	adc     #$01
-	bcc     L002C
-	inx
-L002C:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; ++temp3;
-;
-	inc     _temp3
-;
-; one_vram_buffer(0xB4, NTADR_A(temp1, temp3));
-;
-	lda     #$B4
-	jsr     pusha
-	ldx     #$00
-	lda     _temp3
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	lda     _temp1
-	ora     ptr1
-	pha
-	lda     tmp1
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; one_vram_buffer(0xB5, NTADR_A(temp1 + 1, temp3));
-;
-	lda     #$B5
-	jsr     pusha
-	ldx     #$00
-	lda     _temp3
-	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	lda     _temp1
-	clc
-	adc     #$01
-	bcc     L002D
-	inx
-L002D:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _one_vram_buffer
-;
-; changeAttributeTable(0b10);
-;
+	ldy     #$00
+	lda     (sp),y
+	cmp     #$20
+	bne     L0002
 	lda     #$02
-L009C:	jsr     _changeAttributeTable
-;
-; temp0 += 5;
-;
-	lda     #$05
-	clc
-	adc     _temp0
-	sta     _temp0
-;
-; printNumber(numFlags, 2, 3);
-;
-L002A:	jsr     decsp2
-	lda     _numFlags
-	ldy     #$01
-	sta     (sp),y
-	lda     #$02
-	dey
-	sta     (sp),y
-	lda     #$03
-	jsr     _printNumber
-;
-; tempTileX = cursorX;
-;
-L007D:	lda     _cursorX
-	sta     _tempTileX
-;
-; tempTileY = cursorY;
-;
-	lda     _cursorY
-	sta     _tempTileY
-;
-; if(!getTileIsFlag() && !getTileIsActivated()) {
-;
-	jsr     _getTileIsFlag
-	tax
-	bne     L0083
-	jsr     _getTileIsActivated
-	tax
-	bne     L0083
-;
-; if(BUTTON_DOWN(PAD_A)) {
-;
-	lda     _controller
-	and     #$80
-	beq     L0082
-	lda     _prevController
-	and     #$80
-	bne     L0082
-;
-; if(getTileIsMine()) {
-;
-	jsr     _getTileIsMine
-	tax
-	beq     L0036
-;
-; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
-;
-	lda     #$06
-	jsr     pusha
-	ldx     #$3F
-	lda     #$00
-	jsr     _one_vram_buffer
-;
-; debugTemp0 = 5;
-;
-	lda     #$05
-	sta     _debugTemp0
-;
-; } else {
-;
-	jmp     L0082
-;
-; pushCursorXY();
-;
-L0036:	jsr     _pushCursorXY
-;
-; countMinesAroundTile();
-;
-	jsr     _countMinesAroundTile
-;
-; popCursorXY();
-;
-	jsr     _popCursorXY
-;
-; if(temp2 == 0) floodFillZeros(); //enjoy
-;
-	lda     _temp2
-	bne     L0038
-	jsr     _floodFillZeros
-;
-; else activateTileNoCount();
-;
-	jmp     L0082
-L0038:	jsr     _activateTileNoCount
-;
-; cursorX = tempTileX;
-;
-L0082:	lda     _tempTileX
-	sta     _cursorX
-;
-; cursorY = tempTileY;
-;
-	lda     _tempTileY
-	sta     _cursorY
-;
-; if(BUTTON_DOWN(PAD_SELECT) && getTileIsActivated()) {
-;
-L0083:	lda     _controller
-	and     #$20
-	jeq     L003A
-	lda     _prevController
-	and     #$20
-	jne     L003A
-	jsr     _getTileIsActivated
-	tax
-	jeq     L003A
-;
-; pushCursorXY();
-;
-	jsr     _pushCursorXY
-;
-; temp2 = countMinesAroundTile();
-;
-	jsr     _countMinesAroundTile
-	sta     _temp2
-;
-; popCursorXY();
-;
-	jsr     _popCursorXY
-;
-; temp1 = temp2;
-;
-	lda     _temp2
-	sta     _temp1
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = 0xFF; //end of list of non-mine tiles
-;
-	ldy     _fillStackPos
-	lda     #$FF
-	sta     _fillStackX,y
-;
-; temp2 = 0;
-;
-	lda     #$00
-	sta     _temp2
-;
-; checkAdjacentTilesFunction = _checkPos2;
-;
-	lda     #>(__checkPos2)
-	sta     _checkAdjacentTilesFunction+1
-	lda     #<(__checkPos2)
-	sta     _checkAdjacentTilesFunction
-;
-; checkAdjacentTiles();
-;
-	jsr     _checkAdjacentTiles
-;
-; if(temp2 == temp1) {
-;
-	lda     _temp2
-	cmp     _temp1
-	bne     L0086
-;
-; while(fillStackX[fillStackPos] != 0xFF) {
-;
-	jmp     L0045
-;
-; popCursorXY();
-;
-L0040:	jsr     _popCursorXY
-;
-; if(getTileIsMine()) {
-;
-	jsr     _getTileIsMine
-	tax
-	beq     L0044
-;
-; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove, make screen be destroyed)
-;
-	lda     #$06
-	jsr     pusha
-	ldx     #$3F
-	lda     #$00
-	jsr     _one_vram_buffer
-;
-; debugTemp0 = 5;
-;
-	lda     #$05
-	sta     _debugTemp0
-;
-; } else {
-;
-	jmp     L0045
-;
-; pushCursorXY();
-;
-L0044:	jsr     _pushCursorXY
-;
-; countMinesAroundTile();
-;
-	jsr     _countMinesAroundTile
-;
-; popCursorXY();
-;
-	jsr     _popCursorXY
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = tempTileX;
-;
-	ldy     _fillStackPos
-	lda     _tempTileX
-	sta     _fillStackX,y
-;
-; fillStackY[fillStackPos] = tempTileY;
-;
-	ldy     _fillStackPos
-	lda     _tempTileY
-	sta     _fillStackY,y
-;
-; tempTileX = cursorX;
-;
-	lda     _cursorX
-	sta     _tempTileX
-;
-; tempTileY = cursorY;
-;
-	lda     _cursorY
-	sta     _tempTileY
-;
-; if(temp2 == 0) floodFillZeros();
-;
-	lda     _temp2
-	bne     L0048
-	jsr     _floodFillZeros
-;
-; else activateTileNoCount();
-;
-	jmp     L0049
-L0048:	jsr     _activateTileNoCount
-;
-; tempTileX = fillStackX[fillStackPos];
-;
-L0049:	ldy     _fillStackPos
-	lda     _fillStackX,y
-	sta     _tempTileX
-;
-; tempTileY = fillStackY[fillStackPos];
-;
-	ldy     _fillStackPos
-	lda     _fillStackY,y
-	sta     _tempTileY
-;
-; --fillStackPos;
-;
-	dec     _fillStackPos
-;
-; while(fillStackX[fillStackPos] != 0xFF) {
-;
-L0045:	ldy     _fillStackPos
-	lda     _fillStackX,y
-	cmp     #$FF
-	bne     L0040
-;
-; --fillStackPos;
-;
-	dec     _fillStackPos
-;
-; cursorX = tempTileX;
-;
-L0086:	lda     _tempTileX
-	sta     _cursorX
-;
-; cursorY = tempTileY;
-;
-	lda     _tempTileY
-	sta     _cursorY
-;
-; if(numTilesLeft == 0) {
-;
-L003A:	lda     _numTilesLeft
-	ora     _numTilesLeft+1
-	jne     L008D
+	jsr     _sample_play
 ;
 ; oam_clear();
 ;
-	jsr     _oam_clear
+L0002:	jsr     _oam_clear
 ;
 ; ppu_wait_nmi();
 ;
 	jsr     _ppu_wait_nmi
 ;
-; color_emphasis(COL_EMP_GREEN);
+; color_emphasis(emphasis);
 ;
-	lda     #$40
+	ldy     #$00
+	lda     (sp),y
 	jsr     _color_emphasis
 ;
 ; pal_bg_bright(7);
@@ -4966,41 +4703,17 @@ L003A:	lda     _numTilesLeft
 ;
 	lda     _gameMode
 	and     #$08
-	bne     L0087
+	bne     L0003
 ;
-; vram_adr(NTADR_A(18, 12));
-;
-	ldx     #$21
-	lda     #$92
-	jsr     _vram_adr
-;
-; vram_put(0x82);
+; printTile(0x82, NTADR_A(18, 12));
 ;
 	lda     #$82
-	jsr     _vram_put
-;
-; vram_put(0x83);
-;
-	lda     #$83
-	jsr     _vram_put
-;
-; vram_adr(NTADR_A(18, 13));
-;
+	jsr     pusha
 	ldx     #$21
-	lda     #$B2
-	jsr     _vram_adr
-;
-; vram_put(0x92);
-;
 	lda     #$92
-	jsr     _vram_put
+	jsr     _printTile
 ;
-; vram_put(0x93);
-;
-	lda     #$93
-	jsr     _vram_put
-;
-; vram_adr(0x23DC);
+; vram_adr(0x23DC); //get the right palette
 ;
 	ldx     #$23
 	lda     #$DC
@@ -5011,127 +4724,9 @@ L003A:	lda     _numTilesLeft
 	lda     #$4C
 	jsr     _vram_put
 ;
-; if(!(gameMode & (0b1 << 6))) {
-;
-L0087:	lda     _gameMode
-	and     #$40
-	bne     L0088
-;
-; vram_adr(NTADR_A(18, 14));
-;
-	ldx     #$21
-	lda     #$D2
-	jsr     _vram_adr
-;
-; vram_put(0xA6);
-;
-	lda     #$A6
-	jsr     _vram_put
-;
-; vram_put(0xA7);
-;
-	lda     #$A7
-	jsr     _vram_put
-;
-; vram_adr(NTADR_A(18, 15));
-;
-	ldx     #$21
-	lda     #$F2
-	jsr     _vram_adr
-;
-; vram_put(0xB6);
-;
-	lda     #$B6
-	jsr     _vram_put
-;
-; vram_put(0xB7);
-;
-	lda     #$B7
-	jsr     _vram_put
-;
-; if(gameMode & (0b1 << 4)) {
-;
-L0088:	lda     _gameMode
-	and     #$10
-	beq     L008A
-;
-; vram_adr(NTADR_A(18, 16));
-;
-	ldx     #$22
-	lda     #$12
-	jsr     _vram_adr
-;
-; vram_put(0xA8);
-;
-	lda     #$A8
-	jsr     _vram_put
-;
-; vram_put(0xA9);
-;
-	lda     #$A9
-	jsr     _vram_put
-;
-; vram_adr(NTADR_A(18, 17));
-;
-	ldx     #$22
-	lda     #$32
-	jsr     _vram_adr
-;
-; vram_put(0xB8);
-;
-	lda     #$B8
-	jsr     _vram_put
-;
-; vram_put(0xB9);
-;
-	lda     #$B9
-	jsr     _vram_put
-;
-; pal_bright(0);
-;
-	lda     #$00
-L008A:	jsr     _pal_bright
-;
-; ppu_on_all();
-;
-	jsr     _ppu_on_all
-;
-; one_vram_buffer(0b00001100, 0x23F4);
-;
-	lda     #$0C
-	jsr     pusha
-	ldx     #$23
-	lda     #$F4
-	jsr     _one_vram_buffer
-;
-; printString(youWonText, sizeof(youWonText), 12, 10);
-;
-	jsr     decsp4
-	lda     #<(_youWonText)
-	ldy     #$02
-	sta     (sp),y
-	iny
-	lda     #>(_youWonText)
-	sta     (sp),y
-	lda     #$08
-	ldy     #$01
-	sta     (sp),y
-	lda     #$0C
-	dey
-	sta     (sp),y
-	lda     #$0A
-	jsr     _printString
-;
-; printTime(11, 14);
-;
-	lda     #$0B
-	jsr     pusha
-	lda     #$0E
-	jsr     _printTime
-;
 ; printHexNumber(boardSeed, 11, 18);
 ;
-	jsr     decsp3
+L0003:	jsr     decsp3
 	lda     _boardSeed
 	ldy     #$01
 	sta     (sp),y
@@ -5151,6 +4746,77 @@ L008A:	jsr     _pal_bright
 	ldx     #$22
 	lda     #$50
 	jsr     _one_vram_buffer
+;
+; }
+;
+	jmp     incsp1
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ endGameB (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_endGameB: near
+
+.segment	"CODE"
+
+;
+; flush_vram_update2(); //flush any vram updates
+;
+	jsr     _flush_vram_update2
+;
+; pal_bright(0);
+;
+	lda     #$00
+	jsr     _pal_bright
+;
+; ppu_on_all();
+;
+	jsr     _ppu_on_all
+;
+; selectionArrowIndex = 0;
+;
+	lda     #$00
+	sta     _selectionArrowIndex
+;
+; selectionArrowNumIndices = sizeof(gameEndScreenPositionsX);
+;
+	lda     #$02
+	sta     _selectionArrowNumIndices
+;
+; selectionArrowPositionsX = gameEndScreenPositionsX;
+;
+	lda     #>(_gameEndScreenPositionsX)
+	sta     _selectionArrowPositionsX+1
+	lda     #<(_gameEndScreenPositionsX)
+	sta     _selectionArrowPositionsX
+;
+; selectionArrowPositionsY = gameEndScreenPositionsY;
+;
+	lda     #>(_gameEndScreenPositionsY)
+	sta     _selectionArrowPositionsY+1
+	lda     #<(_gameEndScreenPositionsY)
+	sta     _selectionArrowPositionsY
+;
+; selectionArrowShouldUseArrow = gameEndScreenShouldUseArrow;
+;
+	lda     #>(_gameEndScreenShouldUseArrow)
+	sta     _selectionArrowShouldUseArrow+1
+	lda     #<(_gameEndScreenShouldUseArrow)
+	sta     _selectionArrowShouldUseArrow
+;
+; selectionArrow.xPos = gameEndScreenPositionsX[0];
+;
+	lda     _gameEndScreenPositionsX
+	sta     _selectionArrow+3
+;
+; selectionArrow.yPos = gameEndScreenPositionsY[0];
+;
+	lda     _gameEndScreenPositionsY
+	sta     _selectionArrow
 ;
 ; temp0 = 0;
 ;
@@ -5173,22 +4839,22 @@ L008A:	jsr     _pal_bright
 ;
 	lda     _numMines
 	cmp     #$0A
-	bcs     L008B
+	bcs     L0008
 	lda     #$01
 ;
 ; else if(numMines < 100) temp1 = 2;
 ;
-	jmp     L0061
-L008B:	lda     _numMines
+	jmp     L0007
+L0008:	lda     _numMines
 	cmp     #$64
-	bcs     L008C
+	bcs     L0009
 	lda     #$02
 ;
 ; else temp1 = 3;
 ;
-	jmp     L0061
-L008C:	lda     #$03
-L0061:	sta     _temp1
+	jmp     L0007
+L0009:	lda     #$03
+L0007:	sta     _temp1
 ;
 ; one_vram_buffer(CLOSING_BRACKET, NTADR_A(17 + temp1, 18));
 ;
@@ -5198,9 +4864,9 @@ L0061:	sta     _temp1
 	lda     _temp1
 	clc
 	adc     #$11
-	bcc     L0055
+	bcc     L0006
 	inx
-L0055:	ora     #$40
+L0006:	ora     #$40
 	pha
 	txa
 	ora     #$02
@@ -5239,24 +4905,1160 @@ L0055:	ora     #$40
 ; temp0 = TRUE;
 ;
 	lda     #$01
+	sta     _temp0
 ;
-; return;
+; }
 ;
-	jmp     L0062
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ winGame (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_winGame: near
+
+.segment	"CODE"
+
+;
+; endGameA(COL_EMP_GREEN);
+;
+	lda     #$40
+	jsr     _endGameA
+;
+; if(!(gameMode & (0b1u << 6))) {
+;
+	lda     _gameMode
+	and     #$40
+	bne     L0004
+;
+; printTileVramBuffer(0xA6, NTADR_A(18, 14));
+;
+	lda     #$A6
+	jsr     pusha
+	ldx     #$21
+	lda     #$D2
+	jsr     _printTileVramBuffer
+;
+; if(IS_GAME_CHEATS()) {
+;
+L0004:	lda     _gameMode
+	and     #$10
+	beq     L0005
+;
+; printTileVramBuffer(0xA8, NTADR_A(18, 16));
+;
+	lda     #$A8
+	jsr     pusha
+	ldx     #$22
+	lda     #$12
+	jsr     _printTileVramBuffer
+;
+; music_play(GAME_END_MUSIC);
+;
+L0005:	lda     #$02
+	jsr     _music_play
+;
+; printString(youWonText, sizeof(youWonText), 12, 10);
+;
+	jsr     decsp4
+	lda     #<(_youWonText)
+	ldy     #$02
+	sta     (sp),y
+	iny
+	lda     #>(_youWonText)
+	sta     (sp),y
+	lda     #$08
+	ldy     #$01
+	sta     (sp),y
+	lda     #$0C
+	dey
+	sta     (sp),y
+	lda     #$0A
+	jsr     _printString
+;
+; printTime(11, 14);
+;
+	lda     #$0B
+	jsr     pusha
+	lda     #$0E
+	jsr     _printTime
+;
+; endGameB();
+;
+	jmp     _endGameB
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ loseGame (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_loseGame: near
+
+.segment	"CODE"
+
+;
+; if(IS_GAME_CHEATS()) {
+;
+	lda     _gameMode
+	and     #$10
+	beq     L0004
+;
+; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0);
+;
+	lda     #$06
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
+; debugTemp0 = 5;
+;
+	lda     #$05
+	sta     _debugTemp0
+;
+; sample_play(2);
+;
+	lda     #$02
+	jmp     _sample_play
+;
+; one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0);
+;
+L0004:	lda     #$06
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
+; endGameA(COL_EMP_RED);
+;
+	lda     #$20
+	jsr     _endGameA
+;
+; printString(gameOverText, sizeof(gameOverText), 11, 10);
+;
+	jsr     decsp4
+	lda     #<(_gameOverText)
+	ldy     #$02
+	sta     (sp),y
+	iny
+	lda     #>(_gameOverText)
+	sta     (sp),y
+	lda     #$0A
+	ldy     #$01
+	sta     (sp),y
+	lda     #$0B
+	dey
+	sta     (sp),y
+	lda     #$0A
+	jsr     _printString
+;
+; clearScreenPrecalculated(5, NTADR_A(11, 12)); //don't show the time text
+;
+	lda     #$05
+	jsr     pusha
+	ldx     #$21
+	lda     #$8B
+	jsr     _clearScreenPrecalculated
+;
+; endGameB();
+;
+	jmp     _endGameB
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ updateGameEnd (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_updateGameEnd: near
+
+.segment	"CODE"
+
+;
+; updateSelectionArrow();
+;
+	jsr     _updateSelectionArrow
+;
+; if(BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START)) {
+;
+	lda     _controller
+	and     #$80
+	beq     L000B
+	lda     _prevController
+	and     #$80
+	beq     L000E
+L000B:	lda     _controller
+	and     #$10
+	beq     L000D
+	lda     _prevController
+	and     #$10
+	beq     L000E
+L000D:	rts
+;
+; switch(selectionArrowIndex) {
+;
+L000E:	lda     _selectionArrowIndex
+;
+; }
+;
+	beq     L0010
+	cmp     #$01
+	beq     L0011
+	rts
+;
+; isCustomSeed = FALSE;
+;
+L0010:	sta     _isCustomSeed
+;
+; oam_clear();
+;
+	jsr     _oam_clear
+;
+; newGame();
+;
+	jsr     _newGame
+;
+; gameMode &= ~(0b1 << 5); //clear the paused state
+;
+	lda     _gameMode
+	and     #$DF
+	sta     _gameMode
+;
+; break;
+;
+	rts
+;
+; gameMode &= ~(0b111); //set the gamemode to title screen (mode 0)
+;
+L0011:	lda     _gameMode
+	and     #$F8
+	sta     _gameMode
+;
+; oam_clear();
+;
+	jsr     _oam_clear
+;
+; music_stop();
+;
+	jsr     _music_stop
+;
+; showTitleScreen();
+;
+	jmp     _showTitleScreen
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ gameUpdateDifficultyIndependent (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_gameUpdateDifficultyIndependent: near
+
+.segment	"CODE"
+
+;
+; if(debugTemp0) { //debug stuph
+;
+	lda     _debugTemp0
+	beq     L008F
+;
+; --debugTemp0;
+;
+	dec     _debugTemp0
+;
+; if(!debugTemp0) one_vram_buffer(0x09, PALETTE_MEMORY_BEGIN + 0x0); //make the screen normal again
+;
+	bne     L005F
+	lda     #$09
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
+; temp4 = FALSE;
+;
+L005F:	lda     #$00
+L008F:	sta     _temp4
+;
+; if(BUTTON_DOWN(PAD_RIGHT)) {
+;
+	lda     _controller
+	and     #$01
+	beq     L0063
+	lda     _prevController
+	and     #$01
+	bne     L0063
+;
+; __asm__("ldx %v", cursorX);
+;
+	ldx     _cursorX
+;
+; __asm__("inx");
+;
+	inx
+;
+; __asm__("cpx %v", boardWidth);
+;
+	cpx     _boardWidth
+;
+; __asm__("bne @padRightSkip");
+;
+	bne     @padRightSkip
+;
+; __asm__("ldx #$00");
+;
+	tax
+;
+; __asm__("stx %v", cursorX);
+;
+@padRightSkip:
+	stx     _cursorX
+;
+; temp4 = TRUE;
+;
+	lda     #$01
+	sta     _temp4
+;
+; if(BUTTON_DOWN(PAD_LEFT)) {
+;
+L0063:	lda     _controller
+	and     #$02
+	beq     L0067
+	lda     _prevController
+	and     #$02
+	bne     L0067
+;
+; __asm__("ldx %v", cursorX);
+;
+	ldx     _cursorX
+;
+; __asm__("dex");
+;
+	dex
+;
+; __asm__("bpl @padLeftSkip");
+;
+	bpl     @padLeftSkip
+;
+; __asm__("ldx %v", boardWidth);
+;
+	ldx     _boardWidth
+;
+; __asm__("dex");
+;
+	dex
+;
+; __asm__("stx %v", cursorX);
+;
+@padLeftSkip:
+	stx     _cursorX
+;
+; temp4 = TRUE;
+;
+	lda     #$01
+	sta     _temp4
+;
+; if(BUTTON_DOWN(PAD_DOWN)) {
+;
+L0067:	lda     _controller
+	and     #$04
+	beq     L006B
+	lda     _prevController
+	and     #$04
+	bne     L006B
+;
+; __asm__("ldx %v", cursorY);
+;
+	ldx     _cursorY
+;
+; __asm__("inx");
+;
+	inx
+;
+; __asm__("cpx %v", boardHeight);
+;
+	cpx     _boardHeight
+;
+; __asm__("bne @padDownSkip");
+;
+	bne     @padDownSkip
+;
+; __asm__("ldx #00");
+;
+	tax
+;
+; __asm__("stx %v", cursorY);
+;
+@padDownSkip:
+	stx     _cursorY
+;
+; temp4 = TRUE;
+;
+	lda     #$01
+	sta     _temp4
+;
+; if(BUTTON_DOWN(PAD_UP)) {
+;
+L006B:	lda     _controller
+	and     #$08
+	beq     L0010
+	lda     _prevController
+	and     #$08
+	bne     L0010
+;
+; __asm__("ldx %v", cursorY);
+;
+	ldx     _cursorY
+;
+; __asm__("dex");
+;
+	dex
+;
+; __asm__("bpl @padUpSkip");
+;
+	bpl     @padUpSkip
+;
+; __asm__("ldx %v", boardHeight);
+;
+	ldx     _boardHeight
+;
+; __asm__("dex");
+;
+	dex
+;
+; __asm__("stx %v", cursorY);
+;
+@padUpSkip:
+	stx     _cursorY
+;
+; temp4 = TRUE;
+;
+	lda     #$01
+	sta     _temp4
+;
+; if(temp4) sfx_play(SFX_SELECT, 0);
+;
+L0010:	lda     _temp4
+	beq     L006F
+	lda     #$00
+	jsr     pusha
+	jsr     _sfx_play
+;
+; if((frameCount & 0b11111) == 0) {
+;
+L006F:	lda     _frameCount
+	and     #$1F
+	bne     L0071
+;
+; if((frameCount & 0b111111) == 0) one_vram_buffer(WHITE, PALETTE_MEMORY_BEGIN + 0x11);
+;
+	lda     _frameCount
+	and     #$3F
+	bne     L0070
+	lda     #$30
+;
+; else one_vram_buffer(0x38, PALETTE_MEMORY_BEGIN + 0x11);
+;
+	jmp     L0092
+L0070:	lda     #$38
+L0092:	jsr     pusha
+	ldx     #$3F
+	lda     #$11
+	jsr     _one_vram_buffer
+;
+; if(BUTTON_DOWN(PAD_B) && !getTileIsActivated()) {
+;
+L0071:	lda     _controller
+	and     #$40
+	jeq     L0079
+	lda     _prevController
+	and     #$40
+	jne     L0079
+	jsr     _getTileIsActivated
+	tax
+	jne     L0079
+;
+; if(getTileIsFlag()) {
+;
+	jsr     _getTileIsFlag
+	tax
+	jeq     L0076
+;
+; ++numFlags;
+;
+	inc     _numFlags
+;
+; setTileIsFlag(FALSE);
+;
+	lda     #$00
+	jsr     _setTileIsFlag
+;
+; if(IS_GAME_HARD()) {
+;
+	lda     _gameMode
+	and     #$08
+	beq     L0075
+;
+; one_vram_buffer(0x9 + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 5));
+;
+	lda     _cursorX
+	and     #$01
+	jsr     pusha0
+	lda     _cursorY
+	and     #$01
+	jsr     tosxora0
+	asl     a
+	clc
+	adc     #$09
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	clc
+	adc     #$05
+	bcc     L0021
+	inx
+L0021:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _cursorX
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++temp0;
+;
+	inc     _temp0
+;
+; } else {
+;
+	jmp     L0078
+;
+; temp1 = cursorX << 1;
+;
+L0075:	lda     _cursorX
+	asl     a
+	sta     _temp1
+;
+; temp3 = (cursorY << 1) + 6;
+;
+	lda     _cursorY
+	asl     a
+	clc
+	adc     #$06
+	sta     _temp3
+;
+; one_vram_buffer(0xA2, NTADR_A(temp1, temp3));
+;
+	lda     #$A2
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _temp1
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0xA3, NTADR_A(temp1 + 1, temp3));
+;
+	lda     #$A3
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _temp1
+	clc
+	adc     #$01
+	bcc     L0024
+	inx
+L0024:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++temp3;
+;
+	inc     _temp3
+;
+; one_vram_buffer(0xB2, NTADR_A(temp1, temp3));
+;
+	lda     #$B2
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _temp1
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0xB3, NTADR_A(temp1 + 1, temp3));
+;
+	lda     #$B3
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _temp1
+	clc
+	adc     #$01
+	bcc     L0025
+	inx
+L0025:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; changeAttributeTable(0b01);
+;
+	lda     #$01
+;
+; } else if(numFlags > 0) {
+;
+	jmp     L0094
+L0076:	lda     _numFlags
+	jeq     L0078
+;
+; --numFlags;
+;
+	dec     _numFlags
+;
+; setTileIsFlag(TRUE);
+;
+	lda     #$01
+	jsr     _setTileIsFlag
+;
+; gameMode |= (0b1 << 6); //set that a flag was put down
+;
+	lda     _gameMode
+	ora     #$40
+	sta     _gameMode
+;
+; if(IS_GAME_HARD()) {
+;
+	and     #$08
+	beq     L0077
+;
+; one_vram_buffer(0xA + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 5));
+;
+	lda     _cursorX
+	and     #$01
+	jsr     pusha0
+	lda     _cursorY
+	and     #$01
+	jsr     tosxora0
+	asl     a
+	clc
+	adc     #$0A
+	jsr     pusha
+	ldx     #$00
+	lda     _cursorY
+	clc
+	adc     #$05
+	bcc     L002A
+	inx
+L002A:	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _cursorX
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++temp0;
+;
+	inc     _temp0
+;
+; } else {
+;
+	jmp     L0078
+;
+; temp1 = cursorX << 1;
+;
+L0077:	lda     _cursorX
+	asl     a
+	sta     _temp1
+;
+; temp3 = (cursorY << 1) + 6;
+;
+	lda     _cursorY
+	asl     a
+	clc
+	adc     #$06
+	sta     _temp3
+;
+; one_vram_buffer(0xA4, NTADR_A(temp1, temp3));
+;
+	lda     #$A4
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _temp1
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0xA5, NTADR_A(temp1 + 1, temp3));
+;
+	lda     #$A5
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _temp1
+	clc
+	adc     #$01
+	bcc     L002D
+	inx
+L002D:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; ++temp3;
+;
+	inc     _temp3
+;
+; one_vram_buffer(0xB4, NTADR_A(temp1, temp3));
+;
+	lda     #$B4
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	lda     _temp1
+	ora     ptr1
+	pha
+	lda     tmp1
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0xB5, NTADR_A(temp1 + 1, temp3));
+;
+	lda     #$B5
+	jsr     pusha
+	ldx     #$00
+	lda     _temp3
+	jsr     aslax4
+	stx     tmp1
+	asl     a
+	rol     tmp1
+	sta     ptr1
+	ldx     #$00
+	lda     _temp1
+	clc
+	adc     #$01
+	bcc     L002E
+	inx
+L002E:	ora     ptr1
+	pha
+	txa
+	ora     tmp1
+	tax
+	pla
+	pha
+	txa
+	ora     #$20
+	tax
+	pla
+	jsr     _one_vram_buffer
+;
+; changeAttributeTable(0b10);
+;
+	lda     #$02
+L0094:	jsr     _changeAttributeTable
+;
+; temp0 += 5;
+;
+	lda     #$05
+	clc
+	adc     _temp0
+	sta     _temp0
+;
+; sample_play(1);
+;
+L0078:	lda     #$01
+	jsr     _sample_play
+;
+; printNumber(numFlags, 4, 3);
+;
+	jsr     decsp2
+	lda     _numFlags
+	ldy     #$01
+	sta     (sp),y
+	lda     #$04
+	dey
+	sta     (sp),y
+	lda     #$03
+	jsr     _printNumber
+;
+; tempTileX = cursorX;
+;
+L0079:	lda     _cursorX
+	sta     _tempTileX
+;
+; tempTileY = cursorY;
+;
+	lda     _cursorY
+	sta     _tempTileY
+;
+; if(!getTileIsFlag() && !getTileIsActivated()) {
+;
+	jsr     _getTileIsFlag
+	tax
+	bne     L007F
+	jsr     _getTileIsActivated
+	tax
+	bne     L007F
+;
+; if(BUTTON_DOWN(PAD_A)) {
+;
+	lda     _controller
+	and     #$80
+	beq     L007E
+	lda     _prevController
+	and     #$80
+	bne     L007E
+;
+; if(getTileIsMine()) { //oof
+;
+	jsr     _getTileIsMine
+	tax
+	beq     L0037
+;
+; loseGame();
+;
+	jsr     _loseGame
+;
+; if(!IS_GAME_CHEATS()) return;
+;
+	lda     _gameMode
+	and     #$10
+	bne     L007E
+	rts
+;
+; pushCursorXY();
+;
+L0037:	jsr     _pushCursorXY
+;
+; countMinesAroundTile();
+;
+	jsr     _countMinesAroundTile
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
+;
+; if(temp2 == 0) floodFillZeros();
+;
+	lda     _temp2
+	bne     L003A
+	jsr     _floodFillZeros
+;
+; else activateTileNoCount();
+;
+	jmp     L007E
+L003A:	jsr     _activateTileNoCount
+;
+; cursorX = tempTileX;
+;
+L007E:	lda     _tempTileX
+	sta     _cursorX
+;
+; cursorY = tempTileY;
+;
+	lda     _tempTileY
+	sta     _cursorY
+;
+; if(BUTTON_DOWN(PAD_SELECT) && getTileIsActivated()) {
+;
+L007F:	lda     _controller
+	and     #$20
+	jeq     L003C
+	lda     _prevController
+	and     #$20
+	jne     L003C
+	jsr     _getTileIsActivated
+	tax
+	jeq     L003C
+;
+; pushCursorXY();
+;
+	jsr     _pushCursorXY
+;
+; temp2 = countMinesAroundTile();
+;
+	jsr     _countMinesAroundTile
+	sta     _temp2
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
+;
+; temp1 = temp2;
+;
+	lda     _temp2
+	sta     _temp1
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = 0xFF; //end of list of non-mine tiles
+;
+	ldy     _fillStackPos
+	lda     #$FF
+	sta     _fillStackX,y
+;
+; temp2 = 0;
+;
+	lda     #$00
+	sta     _temp2
+;
+; checkAdjacentTilesFunction = _checkPos2;
+;
+	lda     #>(__checkPos2)
+	sta     _checkAdjacentTilesFunction+1
+	lda     #<(__checkPos2)
+	sta     _checkAdjacentTilesFunction
+;
+; checkAdjacentTiles();
+;
+	jsr     _checkAdjacentTiles
+;
+; if(temp2 == temp1) {
+;
+	lda     _temp2
+	cmp     _temp1
+	bne     L0082
+;
+; while(fillStackX[fillStackPos] != 0xFF) {
+;
+	jmp     L0048
+;
+; popCursorXY();
+;
+L0042:	jsr     _popCursorXY
+;
+; if(getTileIsMine()) { //oof
+;
+	jsr     _getTileIsMine
+	tax
+	beq     L0046
+;
+; loseGame();
+;
+	jsr     _loseGame
+;
+; if(!IS_GAME_CHEATS()) return;
+;
+	lda     _gameMode
+	and     #$10
+	bne     L0048
+	rts
+;
+; pushCursorXY();
+;
+L0046:	jsr     _pushCursorXY
+;
+; countMinesAroundTile();
+;
+	jsr     _countMinesAroundTile
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
+;
+; ++fillStackPos;
+;
+	inc     _fillStackPos
+;
+; fillStackX[fillStackPos] = tempTileX;
+;
+	ldy     _fillStackPos
+	lda     _tempTileX
+	sta     _fillStackX,y
+;
+; fillStackY[fillStackPos] = tempTileY;
+;
+	ldy     _fillStackPos
+	lda     _tempTileY
+	sta     _fillStackY,y
+;
+; tempTileX = cursorX;
+;
+	lda     _cursorX
+	sta     _tempTileX
+;
+; tempTileY = cursorY;
+;
+	lda     _cursorY
+	sta     _tempTileY
+;
+; if(temp2 == 0) floodFillZeros();
+;
+	lda     _temp2
+	bne     L004B
+	jsr     _floodFillZeros
+;
+; else activateTileNoCount();
+;
+	jmp     L004C
+L004B:	jsr     _activateTileNoCount
+;
+; tempTileX = fillStackX[fillStackPos];
+;
+L004C:	ldy     _fillStackPos
+	lda     _fillStackX,y
+	sta     _tempTileX
+;
+; tempTileY = fillStackY[fillStackPos];
+;
+	ldy     _fillStackPos
+	lda     _fillStackY,y
+	sta     _tempTileY
+;
+; --fillStackPos;
+;
+	dec     _fillStackPos
+;
+; while(fillStackX[fillStackPos] != 0xFF) {
+;
+L0048:	ldy     _fillStackPos
+	lda     _fillStackX,y
+	cmp     #$FF
+	bne     L0042
+;
+; --fillStackPos;
+;
+	dec     _fillStackPos
+;
+; cursorX = tempTileX;
+;
+L0082:	lda     _tempTileX
+	sta     _cursorX
+;
+; cursorY = tempTileY;
+;
+	lda     _tempTileY
+	sta     _cursorY
+;
+; if(numTilesLeft == 0) {
+;
+L003C:	lda     _numTilesLeft
+	ora     _numTilesLeft+1
+	bne     L0083
+;
+; winGame();
+;
+	jmp     _winGame
 ;
 ; if(BUTTON_DOWN(PAD_START)) {
 ;
-L008D:	lda     _controller
+L0083:	lda     _controller
 	and     #$10
-	jeq     L0092
+	jeq     L0089
 	lda     _prevController
 	and     #$10
-	jne     L0092
+	jne     L0089
 ;
 ; if(temp0 > 0) {
 ;
 	lda     _temp0
-	beq     L0091
+	beq     L0087
 ;
 ; ppu_wait_nmi();
 ;
@@ -5269,7 +6071,7 @@ L008D:	lda     _controller
 ;
 ; gameMode |= (0b1 << 5); //make the gamemode paused
 ;
-L0091:	lda     _gameMode
+L0087:	lda     _gameMode
 	ora     #$20
 	sta     _gameMode
 ;
@@ -5278,14 +6080,21 @@ L0091:	lda     _gameMode
 	lda     #$00
 	sta     _selectionArrowIndex
 ;
-; selectionArrowNumIndices = sizeof(gamePauseMenuPositionsX);
+; selectionArrowNumIndices = sizeof(gamePauseMenuPositionsX) - 1;
 ;
 	lda     #$03
 	sta     _selectionArrowNumIndices
 ;
+; if(IS_GAME_CHEATS()) ++selectionArrowNumIndices;
+;
+	lda     _gameMode
+	and     #$10
+	beq     L0056
+	inc     _selectionArrowNumIndices
+;
 ; selectionArrowPositionsX = gamePauseMenuPositionsX;
 ;
-	lda     #>(_gamePauseMenuPositionsX)
+L0056:	lda     #>(_gamePauseMenuPositionsX)
 	sta     _selectionArrowPositionsX+1
 	lda     #<(_gamePauseMenuPositionsX)
 	sta     _selectionArrowPositionsX
@@ -5304,7 +6113,7 @@ L0091:	lda     _gameMode
 	lda     #<(_gamePauseMenuShouldUseArrow)
 	sta     _selectionArrowShouldUseArrow
 ;
-; printString(pausedText, sizeof(pausedText), 12, 1);
+; printString(pausedText, sizeof(pausedText), 15, 2);
 ;
 	jsr     decsp4
 	lda     #<(_pausedText)
@@ -5316,13 +6125,13 @@ L0091:	lda     _gameMode
 	lda     #$06
 	ldy     #$01
 	sta     (sp),y
-	lda     #$0C
+	lda     #$0F
 	dey
 	sta     (sp),y
-	lda     #$01
+	lda     #$02
 	jsr     _printString
 ;
-; printString(backText, sizeof(backText), 13, 2);
+; printString(backText, sizeof(backText), 16, 3);
 ;
 	jsr     decsp4
 	lda     #<(_backText)
@@ -5331,16 +6140,16 @@ L0091:	lda     _gameMode
 	iny
 	lda     #>(_backText)
 	sta     (sp),y
-	lda     #$0C
+	lda     #$04
 	ldy     #$01
 	sta     (sp),y
-	lda     #$0D
+	lda     #$10
 	dey
 	sta     (sp),y
-	lda     #$02
+	lda     #$03
 	jsr     _printString
 ;
-; printString(newGameText, sizeof(newGameText), 13, 3);
+; printString(newGameText, sizeof(newGameText), 16, 4);
 ;
 	jsr     decsp4
 	lda     #<(_newGameText)
@@ -5352,13 +6161,13 @@ L0091:	lda     _gameMode
 	lda     #$08
 	ldy     #$01
 	sta     (sp),y
-	lda     #$0D
+	lda     #$10
 	dey
 	sta     (sp),y
-	lda     #$03
+	lda     #$04
 	jsr     _printString
 ;
-; printString(leaveText, sizeof(leaveText), 27, 2);
+; printString(leaveText, sizeof(leaveText), 26, 3);
 ;
 	jsr     decsp4
 	lda     #<(_leaveText)
@@ -5370,15 +6179,36 @@ L0091:	lda     _gameMode
 	lda     #$04
 	ldy     #$01
 	sta     (sp),y
-	lda     #$1B
+	lda     #$1A
 	dey
 	sta     (sp),y
-	lda     #$02
+	lda     #$03
+	jsr     _printString
+;
+; if(IS_GAME_CHEATS()) printString(winText, sizeof(winText), 26, 4);
+;
+	lda     _gameMode
+	and     #$10
+	beq     L0088
+	jsr     decsp4
+	lda     #<(_winText)
+	ldy     #$02
+	sta     (sp),y
+	iny
+	lda     #>(_winText)
+	sta     (sp),y
+	tya
+	ldy     #$01
+	sta     (sp),y
+	lda     #$1A
+	dey
+	sta     (sp),y
+	lda     #$04
 	jsr     _printString
 ;
 ; selectionArrow.xPos = gamePauseMenuPositionsX[0];
 ;
-	lda     _gamePauseMenuPositionsX
+L0088:	lda     _gamePauseMenuPositionsX
 	sta     _selectionArrow+3
 ;
 ; selectionArrow.yPos = gamePauseMenuPositionsY[0];
@@ -5388,13 +6218,13 @@ L0091:	lda     _gameMode
 ;
 ; ++secondsFrameCount;
 ;
-L0092:	inc     _secondsFrameCount
+L0089:	inc     _secondsFrameCount
 ;
 ; if(secondsFrameCount == 60) {
 ;
 	lda     _secondsFrameCount
 	cmp     #$3C
-	bne     L0095
+	bne     L008C
 ;
 ; secondsFrameCount = 0;
 ;
@@ -5409,7 +6239,7 @@ L0092:	inc     _secondsFrameCount
 ;
 	lda     _timePlayedSeconds
 	cmp     #$3C
-	bne     L0094
+	bne     L008B
 ;
 ; ++timePlayedMinutes;
 ;
@@ -5419,7 +6249,7 @@ L0092:	inc     _secondsFrameCount
 ;
 	lda     _timePlayedMinutes
 	cmp     #$3C
-	bne     L0093
+	bne     L008A
 ;
 ; timePlayedMinutes = 59;
 ;
@@ -5428,21 +6258,21 @@ L0092:	inc     _secondsFrameCount
 ;
 ; } else timePlayedSeconds = 0;
 ;
-	jmp     L0063
-L0093:	lda     #$00
-L0063:	sta     _timePlayedSeconds
+	jmp     L005E
+L008A:	lda     #$00
+L005E:	sta     _timePlayedSeconds
 ;
-; printTime(7, 3);
+; printTime(9, 3);
 ;
-L0094:	lda     #$07
+L008B:	lda     #$09
 	jsr     pusha
 	lda     #$03
 	jsr     _printTime
 ;
 ; temp0 = FALSE;
 ;
-L0095:	lda     #$00
-L0062:	sta     _temp0
+L008C:	lda     #$00
+	sta     _temp0
 ;
 ; }
 ;
@@ -5483,14 +6313,14 @@ L0002:	lda     _cursorX
 	asl     a
 	sta     _selectionSprite+3
 ;
-; selectionSprite.hardSelectionSprite.yPos = (cursorY << 3) + 31; //1 less to be 1 higher (properly aligned)
+; selectionSprite.hardSelectionSprite.yPos = (cursorY << 3) + 39; //1 less to be properly aligned
 ;
 	lda     _cursorY
 	asl     a
 	asl     a
 	asl     a
 	clc
-	adc     #$1F
+	adc     #$27
 	sta     _selectionSprite
 ;
 ; oam_clear();
@@ -5551,7 +6381,7 @@ L0002:	lda     _cursorX
 	asl     a
 	sta     _selectionSprite+3
 ;
-; selectionSprite.easySelectionSprite.yPos = (cursorY << 4) + 31; //1 less to be 1 higher (properly aligned)
+; selectionSprite.easySelectionSprite.yPos = (cursorY << 4) + 47; //1 less to be 1 higher (properly aligned)
 ;
 	lda     _cursorY
 	asl     a
@@ -5559,7 +6389,7 @@ L0002:	lda     _cursorX
 	asl     a
 	asl     a
 	clc
-	adc     #$1F
+	adc     #$2F
 	sta     _selectionSprite
 ;
 ; oam_clear();
@@ -5592,9 +6422,14 @@ L0002:	lda     _cursorX
 .segment	"CODE"
 
 ;
-; if(IS_GAME_HARD()) {
+; gameMode |= (0b1 << 7); //set board is generating
 ;
 	lda     _gameMode
+	ora     #$80
+	sta     _gameMode
+;
+; if(IS_GAME_HARD()) {
+;
 	and     #$08
 	beq     L0014
 ;
@@ -5609,28 +6444,28 @@ L0002:	lda     _cursorX
 ;
 ; numTilesLeft = (HARD_MAX_X * HARD_MAX_Y) - numMines;
 ;
-	lda     #$20
+	lda     #$E0
 	sec
 	sbc     _numMines
 	sta     _numTilesLeft
-	lda     #$03
+	lda     #$02
 	sbc     #$00
 	sta     _numTilesLeft+1
 ;
 ; temp1 = HARD_MAX_Y;
 ;
-	lda     #$19
+	lda     #$17
 	sta     _temp1
 ;
 ; temp2 = BOARD_MEM_SIZE;
 ;
-	lda     #$68
+	lda     #$5C
 	sta     _temp2
 ;
 ; tempShort0 = HARD_MAX_X * HARD_MAX_Y;
 ;
-	ldx     #$03
-	lda     #$20
+	ldx     #$02
+	lda     #$E0
 ;
 ; } else { //otherwise game is in easy mode
 ;
@@ -5647,7 +6482,7 @@ L0014:	lda     _numMines
 ;
 ; numTilesLeft = (EASY_MAX_X * EASY_MAX_Y) - numMines;
 ;
-	lda     #$C0
+	lda     #$B0
 	sec
 	sbc     _numMines
 	ldx     #$00
@@ -5658,7 +6493,7 @@ L0012:	sta     _numTilesLeft
 ;
 ; temp1 = EASY_MAX_Y;
 ;
-	lda     #$0C
+	lda     #$0B
 	sta     _temp1
 ;
 ; temp2 = EASY_BOARD_USED_MEM_SIZE;
@@ -5669,7 +6504,7 @@ L0012:	sta     _numTilesLeft
 ; tempShort0 = EASY_MAX_X * EASY_MAX_Y;
 ;
 	ldx     #$00
-	lda     #$C0
+	lda     #$B0
 L0018:	sta     _tempShort0
 	stx     _tempShort0+1
 ;
@@ -5783,10 +6618,10 @@ L000A:	ldy     _global_i
 	inc     _global_i
 	jmp     L0015
 ;
-; gameMode &= ~(0b1 << 4); //clear board is updating
+; gameMode &= ~(0b1 << 7); //clear board is generating
 ;
 L0017:	lda     _gameMode
-	and     #$EF
+	and     #$7F
 	sta     _gameMode
 ;
 ; }
@@ -5837,50 +6672,50 @@ L0017:	lda     _gameMode
 	lda     #$C0
 	jsr     _vram_fill
 ;
-; printTile(0x60, NTADR_A(0, 2)); //draw the flag and the clock
+; printTile(0x60, NTADR_A(2, 2)); //draw the flag and the clock
 ;
 	lda     #$60
 	jsr     pusha
 	ldx     #$20
-	lda     #$40
+	lda     #$42
 	jsr     _printTile
 ;
-; printTile(0x62, NTADR_A(5, 2));
+; printTile(0x62, NTADR_A(7, 2));
 ;
 	lda     #$62
 	jsr     pusha
 	ldx     #$20
-	lda     #$45
+	lda     #$47
 	jsr     _printTile
 ;
 ; if(IS_GAME_HARD()) {
 ;
 	lda     _gameMode
 	and     #$08
-	beq     L004B
+	beq     L0047
 ;
 ; for(global_i = 0; global_i < boardWidth; ++global_i) {
 ;
 	lda     #$00
 	sta     _global_i
-L0046:	lda     _global_i
+L0042:	lda     _global_i
 	cmp     _boardWidth
-	bcs     L0049
+	bcs     L0045
 ;
 ; for(global_j = 0; global_j < boardHeight; ++global_j) {
 ;
 	lda     #$00
 	sta     _global_j
-L0047:	lda     _global_j
+L0043:	lda     _global_j
 	cmp     _boardHeight
-	bcs     L0048
+	bcs     L0044
 ;
-; vram_adr(NTADR_A(global_i, global_j + 4));
+; vram_adr(NTADR_A(global_i, global_j + 5));
 ;
 	ldx     #$00
 	lda     _global_j
 	clc
-	adc     #$04
+	adc     #$05
 	bcc     L000B
 	inx
 L000B:	jsr     aslax4
@@ -5913,45 +6748,47 @@ L000B:	jsr     aslax4
 ; for(global_j = 0; global_j < boardHeight; ++global_j) {
 ;
 	inc     _global_j
-	jmp     L0047
+	jmp     L0043
 ;
 ; for(global_i = 0; global_i < boardWidth; ++global_i) {
 ;
-L0048:	inc     _global_i
-	jmp     L0046
+L0044:	inc     _global_i
+	jmp     L0042
 ;
 ; temp2 = 0b00000000; //palette should be 00
 ;
-L0049:	lda     #$00
+L0045:	lda     #$00
 ;
 ; } else {
 ;
-	jmp     L0042
+	jmp     L003F
 ;
 ; for(global_i = 0; global_i < boardWidth; ++global_i) {
 ;
-L004B:	sta     _global_i
-L004C:	lda     _global_i
+L0047:	sta     _global_i
+L0048:	lda     _global_i
 	cmp     _boardWidth
-	jcs     L004F
+	bcs     L004B
 ;
 ; for(global_j = 0; global_j < boardHeight; ++global_j) {
 ;
 	lda     #$00
 	sta     _global_j
-L004D:	lda     _global_j
+L0049:	lda     _global_j
 	cmp     _boardHeight
-	jcs     L004E
+	bcs     L004A
 ;
-; vram_adr(NTADR_A(global_i << 1, (global_j << 1) + 4));
+; printTile(0xA2, NTADR_A(global_i << 1, (global_j << 1) + 6));
 ;
+	lda     #$A2
+	jsr     pusha
 	ldx     #$00
 	lda     _global_j
 	asl     a
-	bcc     L0043
+	bcc     L0040
 	inx
 	clc
-L0043:	adc     #$04
+L0040:	adc     #$06
 	bcc     L0016
 	inx
 L0016:	jsr     aslax4
@@ -5962,9 +6799,9 @@ L0016:	jsr     aslax4
 	ldx     #$00
 	lda     _global_i
 	asl     a
-	bcc     L003E
+	bcc     L003D
 	inx
-L003E:	ora     ptr1
+L003D:	ora     ptr1
 	pha
 	txa
 	ora     tmp1
@@ -5975,76 +6812,22 @@ L003E:	ora     ptr1
 	ora     #$20
 	tax
 	pla
-	jsr     _vram_adr
-;
-; vram_put(0xA2/* + temp4*/);
-;
-	lda     #$A2
-	jsr     _vram_put
-;
-; vram_put(0xA3/* + temp4*/);
-;
-	lda     #$A3
-	jsr     _vram_put
-;
-; vram_adr(NTADR_A(global_i << 1, (global_j << 1) + 5));
-;
-	ldx     #$00
-	lda     _global_j
-	asl     a
-	bcc     L0044
-	inx
-	clc
-L0044:	adc     #$05
-	bcc     L0017
-	inx
-L0017:	jsr     aslax4
-	stx     tmp1
-	asl     a
-	rol     tmp1
-	sta     ptr1
-	ldx     #$00
-	lda     _global_i
-	asl     a
-	bcc     L0040
-	inx
-L0040:	ora     ptr1
-	pha
-	txa
-	ora     tmp1
-	tax
-	pla
-	pha
-	txa
-	ora     #$20
-	tax
-	pla
-	jsr     _vram_adr
-;
-; vram_put(0xB2/* + temp4*/);
-;
-	lda     #$B2
-	jsr     _vram_put
-;
-; vram_put(0xB3/* + temp4*/);
-;
-	lda     #$B3
-	jsr     _vram_put
+	jsr     _printTile
 ;
 ; for(global_j = 0; global_j < boardHeight; ++global_j) {
 ;
 	inc     _global_j
-	jmp     L004D
+	jmp     L0049
 ;
 ; for(global_i = 0; global_i < boardWidth; ++global_i) {
 ;
-L004E:	inc     _global_i
-	jmp     L004C
+L004A:	inc     _global_i
+	jmp     L0048
 ;
 ; temp2 = 0b01010101; //palette should be 01 by default
 ;
-L004F:	lda     #$55
-L0042:	sta     _temp2
+L004B:	lda     #$55
+L003F:	sta     _temp2
 ;
 ; vram_adr(0x23C0);
 ;
@@ -6056,17 +6839,17 @@ L0042:	sta     _temp2
 ;
 	lda     #$00
 	sta     _global_i
-L0050:	lda     _global_i
+L004C:	lda     _global_i
 	cmp     #$08
-	bcs     L0019
+	bcs     L0018
 ;
 ; for(global_j = 0; global_j < 8; ++global_j) {
 ;
 	lda     #$00
 	sta     _global_j
-L0051:	lda     _global_j
+L004D:	lda     _global_j
 	cmp     #$08
-	bcs     L0052
+	bcs     L004E
 ;
 ; vram_put(temp2);
 ;
@@ -6080,10 +6863,10 @@ L0051:	lda     _global_j
 	jsr     aslax3
 	clc
 	adc     _global_i
-	bcc     L0045
+	bcc     L0041
 	inx
 	clc
-L0045:	adc     #<(_attributeTableMirror)
+L0041:	adc     #<(_attributeTableMirror)
 	sta     ptr1
 	txa
 	adc     #>(_attributeTableMirror)
@@ -6095,22 +6878,22 @@ L0045:	adc     #<(_attributeTableMirror)
 ; for(global_j = 0; global_j < 8; ++global_j) {
 ;
 	inc     _global_j
-	jmp     L0051
+	jmp     L004D
 ;
 ; for(global_i = 0; global_i < 8; ++global_i) {
 ;
-L0052:	inc     _global_i
-	jmp     L0050
+L004E:	inc     _global_i
+	jmp     L004C
 ;
 ; vram_adr(0x23C0); //make the flag in the top left blue, and the clock black
 ;
-L0019:	ldx     #$23
+L0018:	ldx     #$23
 	lda     #$C0
 	jsr     _vram_adr
 ;
-; vram_put(0b00100010);
+; vram_put(0b10100000);
 ;
-	lda     #$22
+	lda     #$A0
 	jsr     _vram_put
 ;
 ; vram_put(0b00000000);
@@ -6134,29 +6917,64 @@ L0019:	ldx     #$23
 ; if(numMines == 0) goto finished; //AAAUGH HE USED GOTO ARREST HIM
 ;
 	lda     _numMines
-	jeq     L005F
+	jeq     L0059
+;
+; if(IS_GAME_HARD()) {
+;
+	lda     _gameMode
+	and     #$08
+	beq     L004F
+;
+; if((HARD_MAX_X * HARD_MAX_Y) - (unsigned short)numMines <= 1) goto finished;
+;
+	lda     #$E0
+	sec
+	sbc     _numMines
+	pha
+	lda     #$02
+	sbc     #$00
+	tax
+	pla
+	cpx     #$00
+	bne     L0023
+	cmp     #$02
+L0023:	bcs     L0025
+	jmp     L0058
+;
+; } else if((EASY_MAX_X * EASY_MAX_Y) - (unsigned short)numMines <= 1) goto finished;
+;
+L004F:	lda     #$B0
+	sec
+	sbc     _numMines
+	ldx     #$00
+	bcs     L003E
+	dex
+L003E:	cpx     #$00
+	bne     L0026
+	cmp     #$02
+L0026:	jcc     L0058
 ;
 ; for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
 ;
-	lda     #$00
+L0025:	lda     #$00
 	sta     _cursorX
-L0053:	lda     _cursorX
+L0050:	lda     _cursorX
 	cmp     _boardWidth
-	bcs     L0057
+	bcs     L0054
 ;
 ; for(cursorY = 0; cursorY < boardHeight; ++cursorY) {
 ;
 	lda     #$00
 	sta     _cursorY
-L0054:	lda     _cursorY
+L0051:	lda     _cursorY
 	cmp     _boardHeight
-	bcs     L0056
+	bcs     L0053
 ;
 ; if(getTileIsMine()) continue;
 ;
 	jsr     _getTileIsMine
 	tax
-	bne     L0055
+	bne     L0052
 ;
 ; pushCursorXY();
 ;
@@ -6173,7 +6991,7 @@ L0054:	lda     _cursorY
 ; if(temp2 == 0) {
 ;
 	lda     _temp2
-	bne     L0055
+	bne     L0052
 ;
 ; tempTileX = cursorX;
 ;
@@ -6191,114 +7009,84 @@ L0054:	lda     _cursorY
 ;
 ; goto finished;
 ;
-	jmp     L005E
+	jmp     L0058
 ;
 ; for(cursorY = 0; cursorY < boardHeight; ++cursorY) {
 ;
-L0055:	inc     _cursorY
-	jmp     L0054
+L0052:	inc     _cursorY
+	jmp     L0051
 ;
 ; for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
 ;
-L0056:	inc     _cursorX
-	jmp     L0053
-;
-; if(IS_GAME_HARD()) {
-;
-L0057:	lda     _gameMode
-	and     #$08
-	beq     L0058
-;
-; if((HARD_MAX_X * HARD_MAX_Y) - numMines <= 1) goto finished;
-;
-	lda     #$20
-	sec
-	sbc     _numMines
-	pha
-	lda     #$03
-	sbc     #$00
-	tax
-	pla
-	cmp     #$02
-	txa
-	sbc     #$00
-	bvc     L002E
-	eor     #$80
-L002E:	asl     a
-	lda     #$00
-	bcc     L005A
-	jmp     L005F
-;
-; } else if((EASY_MAX_X * EASY_MAX_Y) - numMines <= 1) goto finished;
-;
-L0058:	lda     #$C0
-	sec
-	sbc     _numMines
-	ldx     #$00
-	bcs     L0041
-	dex
-L0041:	cmp     #$02
-	txa
-	sbc     #$00
-	bvc     L0031
-	eor     #$80
-L0031:	asl     a
-	lda     #$00
-	bcs     L005F
+L0053:	inc     _cursorX
+	jmp     L0050
 ;
 ; for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
 ;
-L005A:	sta     _cursorX
-L005B:	lda     _cursorX
+L0054:	lda     #$00
+	sta     _cursorX
+L0055:	lda     _cursorX
 	cmp     _boardWidth
-	bcs     L005E
+	bcs     L0058
 ;
 ; for(cursorY = 0; cursorY < boardHeight; ++cursorY) {
 ;
 	lda     #$00
 	sta     _cursorY
-L005C:	lda     _cursorY
+L0056:	lda     _cursorY
 	cmp     _boardHeight
-	bcs     L005D
+	bcs     L0057
 ;
 ; if(!getTileIsMine()) {
 ;
 	jsr     _getTileIsMine
 	tax
-	bne     L0038
+	bne     L0037
 ;
-; activateTile();
+; pushCursorXY();
 ;
-	jsr     _activateTile
+	jsr     _pushCursorXY
+;
+; countMinesAroundTile();
+;
+	jsr     _countMinesAroundTile
+;
+; popCursorXY();
+;
+	jsr     _popCursorXY
+;
+; activateTileNoCount();
+;
+	jsr     _activateTileNoCount
 ;
 ; goto finished;
 ;
-	jmp     L005E
+	jmp     L0058
 ;
 ; for(cursorY = 0; cursorY < boardHeight; ++cursorY) {
 ;
-L0038:	inc     _cursorY
-	jmp     L005C
+L0037:	inc     _cursorY
+	jmp     L0056
 ;
 ; for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
 ;
-L005D:	inc     _cursorX
-	jmp     L005B
+L0057:	inc     _cursorX
+	jmp     L0055
 ;
 ; cursorX = 0;
 ;
-L005E:	lda     #$00
-L005F:	sta     _cursorX
+L0058:	lda     #$00
+L0059:	sta     _cursorX
 ;
 ; cursorY = 0;
 ;
 	sta     _cursorY
 ;
-; if(temp0 >= (MAX_SCREEN_UPDATES_PER_FRAME - 18)) {
+; if(temp0 >= (MAX_SCREEN_UPDATES_PER_FRAME - 18)) { //9 potential tiles being updated
 ;
 	lda     _temp0
 	cmp     #$0E
-	bcc     L003B
+	bcc     L003A
 ;
 ; ppu_wait_nmi();
 ;
@@ -6309,21 +7097,21 @@ L005F:	sta     _cursorX
 	lda     #$00
 	sta     _temp0
 ;
-; printNumber(numFlags, 2, 3);
+; printNumber(numFlags, 4, 3);
 ;
-L003B:	jsr     decsp2
+L003A:	jsr     decsp2
 	lda     _numFlags
 	ldy     #$01
 	sta     (sp),y
-	lda     #$02
+	lda     #$04
 	dey
 	sta     (sp),y
 	lda     #$03
 	jsr     _printNumber
 ;
-; printTime(7, 3);
+; printTime(9, 3);
 ;
-	lda     #$07
+	lda     #$09
 	jsr     pusha
 	lda     #$03
 	jmp     _printTime
@@ -6372,18 +7160,42 @@ M0005:
 ;
 ; boardHeight = EASY_MAX_Y;
 ;
-	lda     #$0C
+	lda     #$0B
 	sta     _boardHeight
 ;
 ; numMines = EASY_NUM_MINES;
 ;
-	lda     #$32
+	lda     #$23
 	sta     _numMines
+;
+; if(gameMode & (0b1 << 4)) {
+;
+	lda     _gameMode
+	and     #$10
+	beq     L0005
+;
+; maxMines = 255;
+;
+	lda     #$FF
+	sta     _maxMines
+;
+; minMines = 0;
+;
+	lda     #$00
+;
+; } else {
+;
+	jmp     L0004
 ;
 ; maxMines = EASY_MAX_MINES;
 ;
-	lda     #$96
+L0005:	lda     #$64
 	sta     _maxMines
+;
+; minMines = EASY_MIN_MINES;
+;
+	lda     #$19
+L0004:	sta     _minMines
 ;
 ; }
 ;
@@ -6420,18 +7232,42 @@ M0005:
 ;
 ; boardHeight = HARD_MAX_Y;
 ;
-	lda     #$19
+	lda     #$17
 	sta     _boardHeight
 ;
 ; numMines = HARD_NUM_MINES;
 ;
-	lda     #$AA
+	lda     #$96
 	sta     _numMines
+;
+; if(gameMode & (0b1 << 4)) {
+;
+	lda     _gameMode
+	and     #$10
+	beq     L0005
+;
+; maxMines = 255;
+;
+	lda     #$FF
+	sta     _maxMines
+;
+; minMines = 0;
+;
+	lda     #$00
+;
+; } else {
+;
+	jmp     L0004
 ;
 ; maxMines = HARD_MAX_MINES;
 ;
-	lda     #$E1
+L0005:	lda     #$E1
 	sta     _maxMines
+;
+; minMines = HARD_MIN_MINES;
+;
+	lda     #$64
+L0004:	sta     _minMines
 ;
 ; }
 ;
@@ -6449,6 +7285,10 @@ M0005:
 
 .segment	"CODE"
 
+;
+; ppu_off();
+;
+	jsr     _ppu_off
 ;
 ; prevController = 0;
 ;
@@ -6496,7 +7336,7 @@ M0005:
 	lda     #$00
 	sta     _selectionArrow+2
 ;
-; setToEasyMode();
+; setToEasyMode(); //default easy mode
 ;
 	jsr     _setToEasyMode
 ;
@@ -6524,384 +7364,11 @@ M0005:
 ; bank_spr(1);
 ;
 	lda     #$01
-	jmp     _bank_spr
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ newGame (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_newGame: near
-
-.segment	"CODE"
-
+	jsr     _bank_spr
 ;
-; ppu_off();
+; set_vram_buffer();
 ;
-	jsr     _ppu_off
-;
-; clear_vram_buffer(); //clear any pending updates...
-;
-	jsr     _clear_vram_buffer
-;
-; oam_clear(); //and any remaining sprites
-;
-	jsr     _oam_clear
-;
-; gameMode &= ~(0b1 << 5); //set game not paused (for if pressed from the pause menu)
-;
-	lda     _gameMode
-	and     #$DF
-	sta     _gameMode
-;
-; gameMode = (gameMode & ~(0b111)) | 0b001; //set the gamemode to playing a game (gamemode 1)
-;
-	and     #$F8
-	ora     #$01
-	sta     _gameMode
-;
-; cursorX = 0;
-;
-	lda     #$00
-	sta     _cursorX
-;
-; cursorY = 0;
-;
-	sta     _cursorY
-;
-; fillStackPos = 0;
-;
-	sta     _fillStackPos
-;
-; frameCount = 0;
-;
-	sta     _frameCount
-;
-; selectionArrowIndex = 0;
-;
-	sta     _selectionArrowIndex
-;
-; secondsFrameCount = 0;
-;
-	sta     _secondsFrameCount
-;
-; timePlayedSeconds = 0;
-;
-	sta     _timePlayedSeconds
-;
-; timePlayedMinutes = 0;
-;
-	sta     _timePlayedMinutes
-;
-; generateBoard();
-;
-	jsr     _generateBoard
-;
-; displayBoard();
-;
-	jmp     _displayBoard
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ updateSelectionArrow (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_updateSelectionArrow: near
-
-.segment	"CODE"
-
-;
-; temp4 = selectionArrowShouldUseArrow[selectionArrowIndex]; //the arrow shouldn't be able to be moved left to right when in this mode
-;
-	lda     _selectionArrowShouldUseArrow
-	ldx     _selectionArrowShouldUseArrow+1
-	ldy     _selectionArrowIndex
-	sta     ptr1
-	stx     ptr1+1
-	lda     (ptr1),y
-	sta     _temp4
-;
-; if(!temp3) {
-;
-	lda     _temp3
-	bne     L003C
-;
-; if(BUTTON_DOWN(PAD_DOWN) || (BUTTON_DOWN(PAD_RIGHT) && temp4)) {
-;
-	lda     _controller
-	and     #$04
-	beq     L002A
-	lda     _prevController
-	and     #$04
-	beq     L0032
-L002A:	lda     _controller
-	and     #$01
-	beq     L0033
-	lda     _prevController
-	and     #$01
-	bne     L0033
-	lda     _temp4
-	beq     L0033
-;
-; ++selectionArrowIndex;
-;
-L0032:	inc     _selectionArrowIndex
-;
-; if(selectionArrowIndex == selectionArrowNumIndices) selectionArrowIndex = 0;
-;
-	lda     _selectionArrowIndex
-	cmp     _selectionArrowNumIndices
-	bne     L003C
-	lda     #$00
-	sta     _selectionArrowIndex
-;
-; } else if(BUTTON_DOWN(PAD_UP) || (BUTTON_DOWN(PAD_LEFT) && temp4)) {
-;
-	jmp     L003D
-L0033:	lda     _controller
-	and     #$08
-	beq     L0034
-	lda     _prevController
-	and     #$08
-	beq     L003B
-L0034:	lda     _controller
-	and     #$02
-	beq     L003D
-	lda     _prevController
-	and     #$02
-	bne     L003C
-	lda     _temp4
-	beq     L003D
-;
-; __asm__("ldx %v", selectionArrowIndex);
-;
-L003B:	ldx     _selectionArrowIndex
-;
-; __asm__("dex");
-;
-	dex
-;
-; __asm__("bpl @dontUnderflow");
-;
-	bpl     @dontUnderflow
-;
-; __asm__("lda %v", selectionArrowNumIndices);
-;
-	ldx     _selectionArrowNumIndices
-;
-; __asm__("dex");
-;
-	dex
-;
-; __asm__("stx %v", selectionArrowIndex);
-;
-@dontUnderflow:
-	stx     _selectionArrowIndex
-;
-; temp3 = FALSE;
-;
-L003C:	lda     #$00
-L003D:	sta     _temp3
-;
-; oam_clear();
-;
-	jsr     _oam_clear
-;
-; if(selectionArrowShouldUseArrow[selectionArrowIndex]) {
-;
-	lda     _selectionArrowShouldUseArrow
-	ldx     _selectionArrowShouldUseArrow+1
-	ldy     _selectionArrowIndex
-	sta     ptr1
-	stx     ptr1+1
-	lda     (ptr1),y
-	bne     L0042
-;
-; }
-;
-	rts
-;
-; selectionArrowTargetPosX = selectionArrowPositionsX[selectionArrowIndex];
-;
-L0042:	lda     _selectionArrowPositionsX
-	ldx     _selectionArrowPositionsX+1
-	ldy     _selectionArrowIndex
-	sta     ptr1
-	stx     ptr1+1
-	lda     (ptr1),y
-	sta     _selectionArrowTargetPosX
-;
-; selectionArrowTargetPosY = selectionArrowPositionsY[selectionArrowIndex];
-;
-	lda     _selectionArrowPositionsY
-	ldx     _selectionArrowPositionsY+1
-	ldy     _selectionArrowIndex
-	sta     ptr1
-	stx     ptr1+1
-	lda     (ptr1),y
-	sta     _selectionArrowTargetPosY
-;
-; temp4 = selectionArrowTargetPosY - selectionArrow.yPos;
-;
-	sec
-	sbc     _selectionArrow
-	sta     _temp4
-;
-; ++fillStackPos;
-;
-	inc     _fillStackPos
-;
-; fillStackX[fillStackPos] = temp4; //save it
-;
-	ldy     _fillStackPos
-	lda     _temp4
-	sta     _fillStackX,y
-;
-; temp4 >>= 1;
-;
-	lsr     a
-	sta     _temp4
-;
-; if(temp4 & (0b1 << 6)) { //if negative, bit 6 instead of 7 because temp4 was just bitshifted by 1 (div by 2)
-;
-	and     #$40
-	beq     L003E
-;
-; --temp4; //make temp4 negative (but treat it as a 7 bit number, kinda weird but whatever)
-;
-	dec     _temp4
-;
-; temp4 ^= 0b01111111;
-;
-	lda     _temp4
-	eor     #$7F
-	sta     _temp4
-;
-; selectionArrow.yPos -= temp4;
-;
-	eor     #$FF
-	sec
-	adc     _selectionArrow
-	sta     _selectionArrow
-;
-; if(fillStackX[fillStackPos] == 1) --selectionArrow.yPos;
-;
-	ldy     _fillStackPos
-	lda     _fillStackX,y
-	cmp     #$01
-	bne     L003F
-	dec     _selectionArrow
-;
-; } else {
-;
-	jmp     L003F
-;
-; selectionArrow.yPos += temp4;
-;
-L003E:	lda     _temp4
-	clc
-	adc     _selectionArrow
-	sta     _selectionArrow
-;
-; if(fillStackX[fillStackPos] == 0b11111111) ++selectionArrow.yPos;
-;
-	ldy     _fillStackPos
-	lda     _fillStackX,y
-	cmp     #$FF
-	bne     L003F
-	inc     _selectionArrow
-;
-; temp4 = selectionArrowTargetPosX - selectionArrow.xPos;
-;
-L003F:	lda     _selectionArrowTargetPosX
-	sec
-	sbc     _selectionArrow+3
-	sta     _temp4
-;
-; fillStackX[fillStackPos] = temp4; //save it
-;
-	ldy     _fillStackPos
-	lda     _temp4
-	sta     _fillStackX,y
-;
-; temp4 >>= 1; //divide by 2 to make a smooth effect
-;
-	lsr     a
-	sta     _temp4
-;
-; if(temp4 & (0b1 << 6)) { //if negative, bit 6 instead of 7 because temp4 was just bitshifted by 1 (div by 2)
-;
-	and     #$40
-	beq     L0040
-;
-; --temp4; //make temp4 negative (but treat it as a 7 bit number, kinda weird but whatever)
-;
-	dec     _temp4
-;
-; temp4 ^= 0b01111111;
-;
-	lda     _temp4
-	eor     #$7F
-	sta     _temp4
-;
-; selectionArrow.xPos -= temp4;
-;
-	eor     #$FF
-	sec
-	adc     _selectionArrow+3
-	sta     _selectionArrow+3
-;
-; if(fillStackX[fillStackPos] == 1) --selectionArrow.xPos;
-;
-	ldy     _fillStackPos
-	lda     _fillStackX,y
-	cmp     #$01
-	bne     L0041
-	dec     _selectionArrow+3
-;
-; } else {
-;
-	jmp     L0041
-;
-; selectionArrow.xPos += temp4;
-;
-L0040:	lda     _temp4
-	clc
-	adc     _selectionArrow+3
-	sta     _selectionArrow+3
-;
-; if(fillStackX[fillStackPos] == 0b11111111) ++selectionArrow.xPos;
-;
-	ldy     _fillStackPos
-	lda     _fillStackX,y
-	cmp     #$FF
-	bne     L0041
-	inc     _selectionArrow+3
-;
-; --fillStackPos;
-;
-L0041:	dec     _fillStackPos
-;
-; oam_spr(selectionArrow.xPos, selectionArrow.yPos, selectionArrow.tile, selectionArrow.attributes);
-;
-	jsr     decsp3
-	lda     _selectionArrow+3
-	ldy     #$02
-	sta     (sp),y
-	lda     _selectionArrow
-	dey
-	sta     (sp),y
-	lda     _selectionArrow+1
-	dey
-	sta     (sp),y
-	lda     _selectionArrow+2
-	jmp     _oam_spr
+	jmp     _set_vram_buffer
 
 .endproc
 
@@ -6920,78 +7387,98 @@ L0041:	dec     _fillStackPos
 ;
 	jsr     _updateSelectionArrow
 ;
-; if(BUTTON_DOWN(PAD_START)) {
+; if(BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START)) {
 ;
 	lda     _controller
+	and     #$80
+	beq     L000D
+	lda     _prevController
+	and     #$80
+	beq     L0010
+L000D:	lda     _controller
 	and     #$10
-	beq     L000C
+	beq     L000F
 	lda     _prevController
 	and     #$10
-	beq     L000D
-L000C:	rts
+	beq     L0010
+L000F:	rts
 ;
 ; switch(selectionArrowIndex) {
 ;
-L000D:	lda     _selectionArrowIndex
+L0010:	lda     _selectionArrowIndex
 ;
 ; }
 ;
-	beq     L0008
+	beq     L0009
 	cmp     #$01
-	beq     L000E
+	beq     L0011
 	cmp     #$02
-	beq     L000F
+	beq     L0012
+	cmp     #$03
+	jeq     L000C
 	rts
 ;
-; clearScreen(sizeof(pausedText), 12, 1);
+; clearScreen(sizeof(pausedText), 15, 2);
 ;
-L0008:	jsr     decsp2
+L0009:	jsr     decsp2
 	lda     #$06
 	ldy     #$01
 	sta     (sp),y
-	lda     #$0C
-	dey
-	sta     (sp),y
-	lda     #$01
-	jsr     _clearScreen
-;
-; clearScreen(sizeof(backText), 13, 2);
-;
-	jsr     decsp2
-	lda     #$0C
-	ldy     #$01
-	sta     (sp),y
-	lda     #$0D
+	lda     #$0F
 	dey
 	sta     (sp),y
 	lda     #$02
 	jsr     _clearScreen
 ;
-; clearScreen(sizeof(newGameText), 13, 3);
-;
-	jsr     decsp2
-	lda     #$08
-	ldy     #$01
-	sta     (sp),y
-	lda     #$0D
-	dey
-	sta     (sp),y
-	lda     #$03
-	jsr     _clearScreen
-;
-; clearScreen(sizeof(leaveText), 27, 2);
+; clearScreen(sizeof(backText), 16, 3);
 ;
 	jsr     decsp2
 	lda     #$04
 	ldy     #$01
 	sta     (sp),y
-	lda     #$1B
+	lda     #$10
 	dey
 	sta     (sp),y
-	lda     #$02
+	lda     #$03
 	jsr     _clearScreen
 ;
-; gameMode &= ~(0b1 << 5);
+; clearScreen(sizeof(newGameText), 16, 4);
+;
+	jsr     decsp2
+	lda     #$08
+	ldy     #$01
+	sta     (sp),y
+	lda     #$10
+	dey
+	sta     (sp),y
+	lda     #$04
+	jsr     _clearScreen
+;
+; clearScreen(sizeof(leaveText), 26, 3);
+;
+	jsr     decsp2
+	lda     #$04
+	ldy     #$01
+	sta     (sp),y
+	lda     #$1A
+	dey
+	sta     (sp),y
+	lda     #$03
+	jsr     _clearScreen
+;
+; clearScreen(sizeof(winText), 26, 4);
+;
+	jsr     decsp2
+	lda     #$03
+	ldy     #$01
+	sta     (sp),y
+	lda     #$1A
+	dey
+	sta     (sp),y
+	lda     #$04
+	jsr     _clearScreen
+;
+; gameMode &= ~(0b1 << 5); //clear the paused state
 ;
 	lda     _gameMode
 	and     #$DF
@@ -7003,7 +7490,7 @@ L0008:	jsr     decsp2
 ;
 ; isCustomSeed = FALSE;
 ;
-L000E:	lda     #$00
+L0011:	lda     #$00
 	sta     _isCustomSeed
 ;
 ; oam_clear();
@@ -7016,9 +7503,13 @@ L000E:	lda     #$00
 ;
 ; gameMode &= ~(0b111); //set the gamemode to title screen (mode 0)
 ;
-L000F:	lda     _gameMode
+L0012:	lda     _gameMode
 	and     #$F8
 	sta     _gameMode
+;
+; music_stop();
+;
+	jsr     _music_stop
 ;
 ; oam_clear();
 ;
@@ -7027,6 +7518,10 @@ L000F:	lda     _gameMode
 ; showTitleScreen();
 ;
 	jmp     _showTitleScreen
+;
+; winGame();
+;
+L000C:	jmp     _winGame
 
 .endproc
 
@@ -7226,12 +7721,17 @@ L000B:	lda     _controller
 	beq     L000D
 	lda     _prevController
 	and     #$10
-	beq     L000E
+	beq     L000F
 L000D:	rts
+;
+; sfx_play(SFX_SELECT, 0);
+;
+L000F:	jsr     pusha
+	jsr     _sfx_play
 ;
 ; loadSelectScreen();
 ;
-L000E:	jmp     _loadSelectScreen
+	jmp     _loadSelectScreen
 
 .endproc
 
@@ -7296,7 +7796,7 @@ L0003:	lda     #$04
 ;
 	lda     _selectionArrowIndex
 	cmp     #$02
-	jne     L007C
+	jne     L0096
 ;
 ; gameSelectShouldUseArrow[3] = TRUE;
 ;
@@ -7307,25 +7807,25 @@ L0003:	lda     #$04
 ;
 	lda     _controller
 	and     #$01
-	beq     L0068
+	beq     L007D
 	lda     _prevController
 	and     #$01
-	bne     L0068
+	bne     L007D
 ;
 ; if(isNumberArrowUp) isNumberArrowUp = FALSE;
 ;
 	lda     _isNumberArrowUp
-	beq     L0067
+	beq     L007A
 	lda     #$00
 	sta     _isNumberArrowUp
 ;
 ; else {
 ;
-	jmp     L006D
+	jmp     L00C4
 ;
 ; ++selectionArrowIndex;
 ;
-L0067:	inc     _selectionArrowIndex
+L007A:	inc     _selectionArrowIndex
 ;
 ; temp3 = TRUE;
 ;
@@ -7334,31 +7834,31 @@ L0067:	inc     _selectionArrowIndex
 ;
 ; goto skipNA;
 ;
-	jmp     L009A
+	jmp     L00C0
 ;
 ; } else if(BUTTON_DOWN(PAD_LEFT)) {
 ;
-L0068:	lda     _controller
+L007D:	lda     _controller
 	and     #$02
-	beq     L006D
+	beq     L0083
 	lda     _prevController
 	and     #$02
-	bne     L006D
+	bne     L0083
 ;
 ; if(!isNumberArrowUp) isNumberArrowUp = TRUE;
 ;
 	lda     _isNumberArrowUp
-	bne     L006C
+	bne     L0081
 	lda     #$01
 	sta     _isNumberArrowUp
 ;
 ; else {
 ;
-	jmp     L006D
+	jmp     L0082
 ;
 ; --selectionArrowIndex;
 ;
-L006C:	dec     _selectionArrowIndex
+L0081:	dec     _selectionArrowIndex
 ;
 ; temp3 = TRUE;
 ;
@@ -7367,38 +7867,50 @@ L006C:	dec     _selectionArrowIndex
 ;
 ; goto skipNA;
 ;
-	jmp     L009A
+	jmp     L00C0
 ;
-; temp0 = BUTTON_DOWN(PAD_A);
+; sfx_play(SFX_SELECT, 0);
 ;
-L006D:	lda     _controller
+L0082:	lda     #$00
+L00C4:	jsr     pusha
+	jsr     _sfx_play
+;
+; temp0 = BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START);
+;
+L0083:	lda     _controller
 	and     #$80
-	beq     L0071
+	beq     L0084
 	lda     _prevController
 	and     #$80
-	beq     L0070
+	beq     L0087
+L0084:	lda     _controller
+	and     #$10
+	beq     L0088
+	lda     _prevController
+	and     #$10
+	beq     L0087
 	lda     #$00
-	jmp     L0071
-L0070:	lda     #$01
-L0071:	sta     _temp0
+	jmp     L0088
+L0087:	lda     #$01
+L0088:	sta     _temp0
 ;
 ; temp1 = BUTTON_DOWN(PAD_B);
 ;
 	lda     _controller
 	and     #$40
-	beq     L0075
+	beq     L008C
 	lda     _prevController
 	and     #$40
-	beq     L0074
+	beq     L008B
 	lda     #$00
-	jmp     L0075
-L0074:	lda     #$01
-L0075:	sta     _temp1
+	jmp     L008C
+L008B:	lda     #$01
+L008C:	sta     _temp1
 ;
 ; if(isNumberArrowUp) {
 ;
 	lda     _isNumberArrowUp
-	beq     L0078
+	beq     L0090
 ;
 ; one_vram_buffer(0x1E, NTADR_A(3, 12));
 ;
@@ -7416,48 +7928,40 @@ L0075:	sta     _temp1
 	lda     #$84
 	jsr     _one_vram_buffer
 ;
-; if(temp0 && numMines <= (minMines - 1)) ++numMines;
+; if(temp0 && numMines < maxMines) ++numMines;
 ;
 	lda     _temp0
-	beq     L001A
+	beq     L001B
+	lda     _numMines
+	cmp     _maxMines
+	bcs     L001B
+	inc     _numMines
+;
+; if(temp1 && numMines <= (maxMines - 10)) numMines += 10;
+;
+L001B:	lda     _temp1
+	beq     L0029
 	lda     _numMines
 	jsr     pusha0
-	lda     _minMines
-	sec
-	sbc     #$01
-	bcs     L001C
-	ldx     #$FF
-L001C:	jsr     tosicmp
-	bmi     L001D
-	bne     L001A
-L001D:	inc     _numMines
-;
-; if(temp1 && numMines <= (minMines - 10)) numMines += 10;
-;
-L001A:	lda     _temp1
-	jeq     L009A
-	lda     _numMines
-	jsr     pusha0
-	lda     _minMines
+	lda     _maxMines
 	sec
 	sbc     #$0A
 	bcs     L0021
 	ldx     #$FF
 L0021:	jsr     tosicmp
 	bmi     L0022
-	jne     L009A
+	bne     L0029
 L0022:	lda     #$0A
 	clc
 	adc     _numMines
-	sta     _numMines
 ;
 ; } else {
 ;
-	jmp     L009A
+	jmp     L00C7
 ;
 ; one_vram_buffer(0x0E, NTADR_A(3, 12));
 ;
-L0078:	lda     #$0E
+L0090:	lda     #$0E
 	jsr     pusha
 	ldx     #$21
 	lda     #$83
@@ -7471,19 +7975,20 @@ L0078:	lda     #$0E
 	lda     #$84
 	jsr     _one_vram_buffer
 ;
-; if(temp0 && numMines >= minMines) --numMines;
+; if(temp0 && numMines > minMines) --numMines;
 ;
 	lda     _temp0
 	beq     L0025
 	lda     _numMines
 	cmp     _minMines
+	beq     L0025
 	bcc     L0025
 	dec     _numMines
 ;
-; if(temp1 && numMines >= minMines + 10) numMines -= 10;
+; if(temp1 && numMines >= (minMines + 10)) numMines -= 10;
 ;
 L0025:	lda     _temp1
-	jeq     L009A
+	beq     L0029
 	lda     _numMines
 	jsr     pusha0
 	lda     _minMines
@@ -7492,17 +7997,27 @@ L0025:	lda     _temp1
 	bcc     L002B
 	ldx     #$01
 L002B:	jsr     tosicmp
-	jmi     L009A
+	bmi     L0029
 	lda     _numMines
 	sec
 	sbc     #$0A
-	sta     _numMines
+L00C7:	sta     _numMines
+;
+; if(temp0 || temp1) sfx_play(SFX_SELECT, 0);
+;
+L0029:	lda     _temp0
+	bne     L0095
+	lda     _temp1
+	jeq     L00C0
+L0095:	lda     #$00
+	jsr     pusha
+	jsr     _sfx_play
 ;
 ; } else if(gameSelectShouldUseArrow[3] == FALSE) {
 ;
-	jmp     L009A
-L007C:	lda     _gameSelectShouldUseArrow+3
-	jne     L008D
+	jmp     L00C0
+L0096:	lda     _gameSelectShouldUseArrow+3
+	jne     L00AC
 ;
 ; one_vram_buffer(0x0E, NTADR_A(3, 12));
 ;
@@ -7524,10 +8039,10 @@ L007C:	lda     _gameSelectShouldUseArrow+3
 ;
 	lda     _controller
 	and     #$01
-	beq     L0080
+	beq     L009B
 	lda     _prevController
 	and     #$01
-	bne     L0080
+	bne     L009B
 ;
 ; isNumberArrowUp = TRUE;
 ;
@@ -7542,7 +8057,7 @@ L007C:	lda     _gameSelectShouldUseArrow+3
 ;
 	lda     _temp1
 	cmp     #$04
-	bne     L0084
+	bne     L009F
 ;
 ; gameSelectShouldUseArrow[3] = TRUE;
 ;
@@ -7559,16 +8074,16 @@ L007C:	lda     _gameSelectShouldUseArrow+3
 ;
 ; goto skipNA;
 ;
-	jmp     L009A
+	jmp     L00C0
 ;
 ; } else if(BUTTON_DOWN(PAD_LEFT)) {
 ;
-L0080:	lda     _controller
+L009B:	lda     _controller
 	and     #$02
-	beq     L0084
+	beq     L00A0
 	lda     _prevController
 	and     #$02
-	bne     L0084
+	bne     L00A0
 ;
 ; isNumberArrowUp = FALSE;
 ;
@@ -7582,7 +8097,7 @@ L0080:	lda     _controller
 ;
 	lda     _temp1
 	cmp     #$FF
-	bne     L0084
+	bne     L009F
 ;
 ; gameSelectShouldUseArrow[3] = TRUE;
 ;
@@ -7599,19 +8114,25 @@ L0080:	lda     _controller
 ;
 ; goto skipNA;
 ;
-	jmp     L009A
+	jmp     L00C0
+;
+; sfx_play(SFX_SELECT, 0);
+;
+L009F:	lda     #$00
+	jsr     pusha
+	jsr     _sfx_play
 ;
 ; one_vram_buffer(UNDERSCORE, NTADR_A(14 + temp1, 17));
 ;
-L0084:	lda     #$5F
+L00A0:	lda     #$5F
 	jsr     pusha
 	ldx     #$00
 	lda     _temp1
 	clc
 	adc     #$0E
-	bcc     L003B
+	bcc     L003E
 	inx
-L003B:	ora     #$20
+L003E:	ora     #$20
 	pha
 	txa
 	ora     #$02
@@ -7628,20 +8149,20 @@ L003B:	ora     #$20
 ;
 	lda     _controller
 	and     #$80
-	beq     L0085
+	beq     L00A1
 	lda     _prevController
 	and     #$80
-	beq     L0088
-L0085:	lda     _controller
+	beq     L00A4
+L00A1:	lda     _controller
 	and     #$10
-	beq     L0089
+	beq     L00A5
 	lda     _prevController
 	and     #$10
-	bne     L0089
+	bne     L00A5
 ;
 ; tempShort0 = (customSeed >> ((3 - temp1) << 2));
 ;
-L0088:	lda     #$03
+L00A4:	lda     #$03
 	sec
 	sbc     _temp1
 	asl     a
@@ -7656,65 +8177,18 @@ L0088:	lda     #$03
 ; ++tempShort0;
 ;
 	inc     _tempShort0
-	bne     L0041
+	bne     L00EE
 	inc     _tempShort0+1
-;
-; tempShort0 &= 0b1111;
-;
-L0041:	lda     _tempShort0
-	ldx     #$00
-	and     #$0F
-	sta     _tempShort0
-	stx     _tempShort0+1
-;
-; customSeed &= ~(0b1111 << ((3 - temp1) << 2));
-;
-	lda     #$03
-	sec
-	sbc     _temp1
-	asl     a
-	asl     a
-	tay
-	lda     #$0F
-	jsr     aslaxy
-	jsr     complax
-	and     _customSeed
-	pha
-	txa
-	and     _customSeed+1
-	tax
-	pla
-	sta     _customSeed
-	stx     _customSeed+1
-;
-; customSeed |= (tempShort0 << ((3 - temp1) << 2));
-;
-	sta     ptr1
-	stx     ptr1+1
-	lda     #$03
-	sec
-	sbc     _temp1
-	asl     a
-	asl     a
-	tay
-	lda     _tempShort0
-	ldx     _tempShort0+1
-	jsr     shlaxy
-	ora     ptr1
-	sta     _customSeed
-	txa
-	ora     ptr1+1
-	sta     _customSeed+1
 ;
 ; } else if(BUTTON_DOWN(PAD_B)) {
 ;
-	jmp     L009A
-L0089:	lda     _controller
+	jmp     L00EE
+L00A5:	lda     _controller
 	and     #$40
-	jeq     L009A
+	jeq     L0046
 	lda     _prevController
 	and     #$40
-	jne     L009A
+	bne     L0046
 ;
 ; tempShort0 = (customSeed >> ((3 - temp1) << 2));
 ;
@@ -7733,14 +8207,14 @@ L0089:	lda     _controller
 ; --tempShort0;
 ;
 	ldx     _tempShort0
-	bne     L0047
+	bne     L004A
 	dec     _tempShort0+1
-L0047:	dex
+L004A:	dex
 	stx     _tempShort0
 ;
 ; tempShort0 &= 0b1111;
 ;
-	lda     _tempShort0
+L00EE:	lda     _tempShort0
 	ldx     #$00
 	and     #$0F
 	sta     _tempShort0
@@ -7785,13 +8259,131 @@ L0047:	dex
 	ora     ptr1+1
 	sta     _customSeed+1
 ;
+; sfx_play(SFX_SELECT, 0);
+;
+	lda     #$00
+	jsr     pusha
+	jsr     _sfx_play
+;
+; if(customSeed == 0xCB58 && BUTTON_DOWN(PAD_SELECT) && !IS_GAME_CHEATS()) {
+;
+L0046:	lda     _customSeed+1
+	cmp     #$CB
+	jne     L00C0
+	lda     _customSeed
+	cmp     #$58
+	jne     L00C0
+	lda     _controller
+	and     #$20
+	jeq     L00C0
+	lda     _prevController
+	and     #$20
+	jne     L00C0
+	lda     _gameMode
+	and     #$10
+	jne     L00C0
+;
+; gameMode |= (0b1u << 4);
+;
+	lda     _gameMode
+	ora     #$10
+	sta     _gameMode
+;
+; controller &= ~(PAD_SELECT); //to prevent the game from starting immediately
+;
+	lda     _controller
+	and     #$DF
+	sta     _controller
+;
+; minMines = 0;
+;
+	lda     #$00
+	sta     _minMines
+;
+; maxMines = 255;
+;
+	lda     #$FF
+	sta     _maxMines
+;
+; isCustomSeed = FALSE;
+;
+	lda     #$00
+	sta     _isCustomSeed
+;
+; customSeed = 0;
+;
+	sta     _customSeed
+	sta     _customSeed+1
+;
+; selectionArrowIndex = 0;
+;
+	sta     _selectionArrowIndex
+;
+; gameSelectShouldUseArrow[3] = TRUE;
+;
+	lda     #$01
+	sta     _gameSelectShouldUseArrow+3
+;
+; one_vram_buffer(OPENING_BRACKET, NTADR_A(9, 16));
+;
+	lda     #$5D
+	jsr     pusha
+	ldx     #$22
+	lda     #$09
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(CLOSING_BRACKET, NTADR_A(12, 16));
+;
+	lda     #$5E
+	jsr     pusha
+	ldx     #$22
+	lda     #$0C
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(BLANK_TILE, NTADR_A(3, 16));
+;
+	lda     #$09
+	jsr     pusha
+	ldx     #$22
+	lda     #$03
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(BLANK_TILE, NTADR_A(7, 16));
+;
+	lda     #$09
+	jsr     pusha
+	ldx     #$22
+	lda     #$07
+	jsr     _one_vram_buffer
+;
+; one_vram_buffer(0x28, PALETTE_MEMORY_BEGIN);
+;
+	lda     #$28
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
+; delay(5);
+;
+	lda     #$05
+	jsr     _delay
+;
+; one_vram_buffer(0x1B, PALETTE_MEMORY_BEGIN);
+;
+	lda     #$1B
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
 ; } else {
 ;
-	jmp     L009A
+	jmp     L00C0
 ;
 ; one_vram_buffer(0x0E, NTADR_A(3, 12));
 ;
-L008D:	lda     #$0E
+L00AC:	lda     #$0E
 	jsr     pusha
 	ldx     #$21
 	lda     #$83
@@ -7809,64 +8401,75 @@ L008D:	lda     #$0E
 ;
 	lda     _controller
 	and     #$01
-	beq     L008E
+	beq     L00AD
 	lda     _prevController
 	and     #$01
-	beq     L0091
-L008E:	lda     _controller
+	beq     L00B0
+L00AD:	lda     _controller
 	and     #$04
-	beq     L0063
+	beq     L00B1
 	lda     _prevController
 	and     #$04
-	beq     L0091
-	lda     #$00
-	jmp     L0063
-L0091:	lda     #$01
+	bne     L00B1
+L00B0:	lda     #$01
 ;
-; else isNumberArrowUp = FALSE;
+; else if(BUTTON_DOWN(PAD_LEFT) || BUTTON_DOWN(PAD_UP)) isNumberArrowUp = FALSE;
 ;
-L0063:	sta     _isNumberArrowUp
+	jmp     L0076
+L00B1:	lda     _controller
+	and     #$02
+	beq     L00B2
+	lda     _prevController
+	and     #$02
+	beq     L0076
+L00B2:	lda     _controller
+	and     #$08
+	beq     L00B6
+	lda     _prevController
+	and     #$08
+	bne     L00B6
+L0076:	sta     _isNumberArrowUp
 ;
 ; gameSelectShouldUseArrow[3] = TRUE;
 ;
-	lda     #$01
+L00B6:	lda     #$01
 	sta     _gameSelectShouldUseArrow+3
 ;
 ; if(BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START)) {
 ;
 	lda     _controller
 	and     #$80
-	beq     L0093
+	beq     L00B7
 	lda     _prevController
 	and     #$80
-	beq     L0096
-L0093:	lda     _controller
+	beq     L00BA
+L00B7:	lda     _controller
 	and     #$10
-	jeq     L009A
+	jeq     L00C0
 	lda     _prevController
 	and     #$10
-	jne     L009A
+	jne     L00C0
 ;
 ; switch(selectionArrowIndex) {
 ;
-L0096:	lda     _selectionArrowIndex
+L00BA:	lda     _selectionArrowIndex
 ;
 ; }
 ;
-	beq     L0056
+	beq     L0063
 	cmp     #$01
-	beq     L0057
+	beq     L0064
 	cmp     #$03
-	beq     L0097
+	beq     L00BB
 	cmp     #$04
-	jeq     L0098
+	jeq     L00BC
 	cmp     #$05
-	jeq     L005A
-	jmp     L009A
+	jeq     L0067
+	jmp     L00C0
 ;
 ; setToEasyMode();
 ;
-L0056:	jsr     _setToEasyMode
+L0063:	jsr     _setToEasyMode
 ;
 ; one_vram_buffer(OPENING_BRACKET, NTADR_A(3, 8));
 ;
@@ -7902,11 +8505,11 @@ L0056:	jsr     _setToEasyMode
 ;
 ; break;
 ;
-	jmp     L009A
+	jmp     L00C0
 ;
 ; setToHardMode();
 ;
-L0057:	jsr     _setToHardMode
+L0064:	jsr     _setToHardMode
 ;
 ; one_vram_buffer(OPENING_BRACKET, NTADR_A(10, 8));
 ;
@@ -7942,11 +8545,11 @@ L0057:	jsr     _setToHardMode
 ;
 ; break;
 ;
-	jmp     L009A
+	jmp     L00C0
 ;
 ; gameSelectShouldUseArrow[3] = FALSE;
 ;
-L0097:	lda     #$00
+L00BB:	lda     #$00
 	sta     _gameSelectShouldUseArrow+3
 ;
 ; temp1 = 0;
@@ -7991,11 +8594,11 @@ L0097:	lda     #$00
 ;
 ; break;
 ;
-	jmp     L009A
+	jmp     L00C0
 ;
 ; isCustomSeed = FALSE;
 ;
-L0098:	lda     #$00
+L00BC:	lda     #$00
 	sta     _isCustomSeed
 ;
 ; one_vram_buffer(OPENING_BRACKET, NTADR_A(9, 16));
@@ -8032,36 +8635,74 @@ L0098:	lda     #$00
 ;
 ; break;
 ;
-	jmp     L009A
+	jmp     L00C0
 ;
-; if(customSeed == 0) isCustomSeed = FALSE;
+; if(customSeed == 0 && !IS_GAME_CHEATS()) isCustomSeed = FALSE; //seed of 0 messes things up so don't let it happen
 ;
-L005A:	lda     _customSeed
+L0067:	lda     _customSeed
 	ora     _customSeed+1
-	bne     L0099
-	sta     _isCustomSeed
+	bne     L006B
+	lda     _gameMode
+	and     #$10
+	beq     L00BD
+L006B:	lda     #$00
+	jmp     L00BF
+L00BD:	sta     _isCustomSeed
+;
+; music_play(GAME_START_MUSIC);
+;
+L00BF:	jsr     _music_play
+;
+; one_vram_buffer(0x16, PALETTE_MEMORY_BEGIN);
+;
+	lda     #$16
+	jsr     pusha
+	ldx     #$3F
+	lda     #$00
+	jsr     _one_vram_buffer
+;
+; delay(132);
+;
+	lda     #$84
+	jsr     _delay
+;
+; pal_fade_to(4, 0);
+;
+	lda     #$04
+	jsr     pusha
+	lda     #$00
+	jsr     _pal_fade_to
 ;
 ; frameCount = 0;
 ;
-L0099:	lda     #$00
+	lda     #$00
 	sta     _frameCount
 ;
 ; newGame();
 ;
 	jmp     _newGame
 ;
-; if(BUTTON_DOWN(PAD_SELECT)) goto startGame;
+; if(BUTTON_DOWN(PAD_SELECT)) { 
 ;
-L009A:	lda     _controller
+L00C0:	lda     _controller
 	and     #$20
-	beq     L005F
+	beq     L006F
 	lda     _prevController
 	and     #$20
-	beq     L005A
+	bne     L006F
+;
+; sfx_play(SFX_SELECT, 0);
+;
+	jsr     pusha
+	jsr     _sfx_play
+;
+; goto startGame;
+;
+	jmp     L0067
 ;
 ; updateSelectionArrow(); //done last because otherwise it messed with the number arrow
 ;
-L005F:	jmp     _updateSelectionArrow
+L006F:	jmp     _updateSelectionArrow
 
 .segment	"RODATA"
 
@@ -8108,22 +8749,19 @@ M0004:
 	cmp     #$02
 	beq     L0009
 	cmp     #$03
-	beq     L000E
+	beq     L000A
 	jmp     L000B
 ;
-; if(IS_GAME_PAUSED()) {
+; if(IS_GAME_PAUSED()) gameUpdatePaused();
 ;
 L000D:	lda     _gameMode
 	and     #$20
 	beq     L0005
-;
-; gameUpdatePaused();
-;
 	jsr     _gameUpdatePaused
 ;
-; } else {
+; else {
 ;
-	jmp     L000E
+	jmp     L0003
 ;
 ; gameUpdateDifficultyIndependent();
 ;
@@ -8138,12 +8776,12 @@ L0005:	jsr     _gameUpdateDifficultyIndependent
 ;
 ; else gameUpdateEasy();
 ;
-	jmp     L000E
+	jmp     L0003
 L0007:	jsr     _gameUpdateEasy
 ;
 ; break;
 ;
-	jmp     L000E
+	jmp     L0003
 ;
 ; updateGameSelection();
 ;
@@ -8151,7 +8789,15 @@ L0009:	jsr     _updateGameSelection
 ;
 ; break;
 ;
-	jmp     L000E
+	jmp     L0003
+;
+; updateGameEnd();
+;
+L000A:	jsr     _updateGameEnd
+;
+; break;
+;
+	jmp     L0003
 ;
 ; updateTitleScreen();
 ;
@@ -8159,7 +8805,7 @@ L000B:	jsr     _updateTitleScreen
 ;
 ; ++frameCount;
 ;
-L000E:	inc     _frameCount
+L0003:	inc     _frameCount
 ;
 ; }
 ;
@@ -8178,10 +8824,6 @@ L000E:	inc     _frameCount
 .segment	"CODE"
 
 ;
-; ppu_off();
-;
-	jsr     _ppu_off
-;
 ; initState();
 ;
 	jsr     _initState
@@ -8189,10 +8831,6 @@ L000E:	inc     _frameCount
 ; showTitleScreen();
 ;
 	jsr     _showTitleScreen
-;
-; set_vram_buffer();
-;
-	jsr     _set_vram_buffer
 ;
 ; ppu_wait_nmi();
 ;

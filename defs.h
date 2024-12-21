@@ -30,18 +30,19 @@ typedef union {
 #define DARK_GREEN_TILE 8
 
 #define HARD_MAX_X 32
-#define HARD_MAX_Y 25
-#define HARD_NUM_MINES 170
+#define HARD_MAX_Y 23
+#define HARD_NUM_MINES 150
 #define HARD_MAX_MINES 225
+#define HARD_MIN_MINES 100
 
 #define EASY_MAX_X 16
-#define EASY_MAX_Y 12
-#define EASY_NUM_MINES 50
-#define EASY_MAX_MINES 150
-#define EASY_MIN_MINES 10
+#define EASY_MAX_Y 11
+#define EASY_NUM_MINES 35
+#define EASY_MAX_MINES 100
+#define EASY_MIN_MINES 25
 
-//32 by 26 size for hard mode, 1 bit per tile, = 33 * 27 / 8 = 104
-#define BOARD_MEM_SIZE 104
+//32 by 23 memory size (to make memory aligned better) for hard mode, 1 bit per tile, = 32 * 23 / 8 = 92
+#define BOARD_MEM_SIZE 92
 #define EASY_BOARD_USED_MEM_SIZE 26
 
 #define NUMBER_TO_TILE 0x30
@@ -61,12 +62,12 @@ typedef union {
 #define UNDERSCORE 0x5F
 #define COLON 0x2D
 
-//custom rle stuff to be at certain coordinates
+/*//custom rle stuff to be at certain coordinates
 
 #define RLE_SINGLE_TILE 0b00
 #define RLE_MULTI_TILE 0b01
 #define RLE_NEW_LINE 010
-#define RLE_ATT_TABLE 0b11
+#define RLE_ATT_TABLE 0b11*/
 
 #define NUM_FLASH_FRAMES 3
 #define NUM_WAIT_FRAMES 75
@@ -74,7 +75,13 @@ typedef union {
 #define MENU_X(x) x * 8
 #define MENU_Y(y) y * 8 + 6
 
-//0xCB58
+#define GAME_START_MUSIC 0
+#define GAME_NORMAL_MUSIC 1
+#define GAME_END_MUSIC 2
+//#define TILES_UPDATING_MUSIC 3
+
+#define SFX_SELECT 0
+#define SFX_TILE_SELECT 1
 
 //commence visual studio code appeasement
 #ifndef __CC65__

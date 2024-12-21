@@ -13,10 +13,14 @@
 #define BUTTON_UP(button) (prevController & button) && !(controller & button)
 
 #define IS_GAME_HARD() (gameMode & (0b1u << 3))
+#define IS_GAME_CHEATS() (gameMode & (0b1u << 4))
 #define IS_GAME_PAUSED() (gameMode & (0b1u << 5))
+#define IS_BOARD_UPDATING() (gameMode & (0b1u << 7))
 
 uchar countMinesAroundTile(void);
 void activateTileNoCount(void);
+void updateSelectionArrow(void);
+void newGame(void);
 
 //zeropage variables
 #pragma bss-name(push, "ZEROPAGE")
@@ -41,7 +45,7 @@ randomState rngState;
 uchar prevController;
 uchar controller;
 
-//bits 0-2: which screen you're on, 3: easy or hard mode, 4: board is updating, 5: is game paused, 6: was flag ever put down
+//bits 0-2: which screen you're on, 3: easy or hard mode, 4: board is updating, 5: is game paused, 6: was flag ever put down, 7: board is generating
 uchar gameMode;
 
 uchar cursorX;
@@ -105,7 +109,7 @@ uchar debugTemp0; //todo remove
 
 const char gameBgPalette[] = {
 
-    0x09, 0x1A, 0x0F, 0x30,
+    0x09, 0x1B, 0x0F, 0x30,
     0x09, 0x08, 0x19, 0x30,
     0x09, 0x08, 0x19, 0x21,
     0x09, 0x0F, 0x0A, 0x30
@@ -145,26 +149,31 @@ const uchar easySelectorMetasprite[] = {
 };
 
 const char pausedText[6] = "PAUSED";
-const char leaveText[4] = "EXIT";
+const char backText[4] = "BACK";
 const char newGameText[8] = "NEW\x9GAME"; //\x9 is the blank tile
-const char backText[12] = "BACK\x9TO\x9GAME";
+const char leaveText[4] = "EXIT";
+const char winText[3] = "WIN";
 
 const char pressStartText[11] = "PRESS\x9START";
 
 const char youWonText[8] = "YOU\x9WON!";
 const char gameOverText[10] = "GAME\x9OVER!";
 
-const uchar gamePauseMenuPositionsX[] = {     MENU_X(12), MENU_X(12), MENU_X(26) };
-const uchar gamePauseMenuPositionsY[] = {     MENU_Y(1),  MENU_Y(2),  MENU_Y(1) };
-const uchar gamePauseMenuShouldUseArrow[] = { TRUE,       TRUE,       TRUE };
+const uchar gamePauseMenuPositionsX[]     = { MENU_X(15), MENU_X(15), MENU_X(25), MENU_X(25) };
+const uchar gamePauseMenuPositionsY[]     = { MENU_Y(2),  MENU_Y(3),  MENU_Y(2),  MENU_Y(3) };
+const uchar gamePauseMenuShouldUseArrow[] = { TRUE,       TRUE,       TRUE,       TRUE };
 
-const uchar gameSelectPositionsX[] = { MENU_X(2), MENU_X(9) + 1, MENU_X(2),  MENU_X(2),  MENU_X(8) + 1, MENU_X(2) };
-const uchar gameSelectPositionsY[] = { MENU_Y(7), MENU_Y(7),     MENU_Y(11), MENU_Y(15), MENU_Y(15),    MENU_Y(17) };
-uchar gameSelectShouldUseArrow[] = {   TRUE,      TRUE,          FALSE,      TRUE,       TRUE,          TRUE }; //intentionally in ram so can be updated
+const uchar gameSelectPositionsX[] = { MENU_X(2), MENU_X(9) + 1, MENU_X(2),  MENU_X(2),      MENU_X(8) + 1,     MENU_X(2) };
+const uchar gameSelectPositionsY[] = { MENU_Y(7), MENU_Y(7),     MENU_Y(11), MENU_Y(15) + 1, MENU_Y(15) + 1,    MENU_Y(17) };
+uchar gameSelectShouldUseArrow[]   = { TRUE,      TRUE,          FALSE,      TRUE,           TRUE,              TRUE }; //intentionally in ram so it can be updated
 
-void showTitleScreen(void);
+const uchar gameEndScreenPositionsX[]     = { MENU_X(11), MENU_X(11) };
+const uchar gameEndScreenPositionsY[]     = { MENU_Y(19), MENU_Y(20) };
+const uchar gameEndScreenShouldUseArrow[] = { TRUE,       TRUE };
 
-#pragma region Random Functions
+void showTitleScreen(void); //pre-declaration to make the function order in the code nicer
+
+#pragma region RNG
 
 inline void updateController(void) {
 
@@ -388,6 +397,17 @@ void printTile(uchar tileStart, int address) {
     vram_put(tileStart + 1);
 }
 
+//prints a 2x2 tile (w/ ppu off)
+void printTileVramBuffer(uchar tileStart, int address) {
+
+    one_vram_buffer(tileStart, address);
+    one_vram_buffer(tileStart + 1, address + 1);
+    address += 0x20;
+    tileStart += 0x10;
+    one_vram_buffer(tileStart, address);
+    one_vram_buffer(tileStart + 1, address + 1);
+}
+
 void clearScreen(uchar length, uchar x, uchar y) {
 
     multi_vram_buffer_horz_fill(BLANK_TILE, length, NTADR_A(x, y));
@@ -560,6 +580,8 @@ void _checkPos2(void) {
 //uses temp0, coords are cursorX + cursorY
 void changeAttributeTable(uchar value) {
 
+    ++cursorY;
+
     ++fillStackPos;
     fillStackX[fillStackPos] = ((cursorY >> 1) << 3) + (cursorX >> 1) + 8;
     fillStackY[fillStackPos] = (((cursorX & 0b1) << 1) + ((cursorY & 0b1) << 2)); //bit offset
@@ -568,6 +590,8 @@ void changeAttributeTable(uchar value) {
     one_vram_buffer(attributeTableMirror[fillStackX[fillStackPos]], 0x23C0 + fillStackX[fillStackPos]);
     ++temp0;
     --fillStackPos;
+
+    --cursorY;
 }
 
 //uses temp2, cursorX, cursorY, checkAdjacentTileFunction, doesn't check if space is already a mine
@@ -591,16 +615,16 @@ void activateTileBase(void) {
 
     if(IS_GAME_HARD()) {
 
-        one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 4));
+        one_vram_buffer(temp2 + NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 5));
         ++temp0;
     } else {
 
         if(temp2 == 8) temp2 = 0x10; //quick hack to get 8-tiles to work properly (they're rare though, so doesn't really matter)
 
-        one_vram_buffer(0x80 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 4));
-        one_vram_buffer(0x81 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 4));
-        one_vram_buffer(0x90 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 5));
-        one_vram_buffer(0x91 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 5));
+        one_vram_buffer(0x80 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 6));
+        one_vram_buffer(0x81 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 6));
+        one_vram_buffer(0x90 + (temp2 << 1), NTADR_A(cursorX << 1, (cursorY << 1) + 7));
+        one_vram_buffer(0x91 + (temp2 << 1), NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 7));
 
         //make the tile blue
         changeAttributeTable(0b11);
@@ -614,6 +638,8 @@ void activateTileBase(void) {
 
         if(temp2 == 0x10) temp2 = 8; //restore temp2 if it got clobbered from the 8-tile shenanigans
     }
+
+    if(!IS_BOARD_UPDATING()) sfx_play(SFX_TILE_SELECT, 1);
 
     --numTilesLeft;
 }
@@ -658,7 +684,7 @@ inline void floodFillZeros(void) {
         
         --fillStackPos;
 
-        //resets the stack, gives it another chance to complete the fill (usually gets like 90% of the way there)
+        //if the stack is about to be too full, resets the stack, then gives it another chance to complete the fill from this point with an empty stack (sometimes works)
         if(fillStackPos >= (FILL_STACK_SIZE - 0x4)) {
             
             fillStackPos = currentStackPos + 1;
@@ -681,14 +707,14 @@ inline void floodFillZeros(void) {
             //anything here will always be a 0 tile, which allows for some shortcuts
             if(IS_GAME_HARD()) {
 
-                one_vram_buffer(NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 4));
+                one_vram_buffer(NUMBER_TO_NUMBER_TILE, NTADR_A(cursorX, cursorY + 5));
                 ++temp0;
             } else {
 
-                one_vram_buffer(0x80, NTADR_A(cursorX << 1, (cursorY << 1) + 4));
-                one_vram_buffer(0x81, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 4));
-                one_vram_buffer(0x90, NTADR_A(cursorX << 1, (cursorY << 1) + 5));
-                one_vram_buffer(0x91, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 5));
+                one_vram_buffer(0x80, NTADR_A(cursorX << 1, (cursorY << 1) + 6));
+                one_vram_buffer(0x81, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 6));
+                one_vram_buffer(0x90, NTADR_A(cursorX << 1, (cursorY << 1) + 7));
+                one_vram_buffer(0x91, NTADR_A((cursorX << 1) + 1, (cursorY << 1) + 7));
 
                 changeAttributeTable(0b11);
 
@@ -711,6 +737,155 @@ inline void floodFillZeros(void) {
 
 #pragma endregion
 
+#pragma region Game End
+
+void endGameA(uchar emphasis) {
+
+    music_stop();
+
+    if(emphasis == COL_EMP_RED) sample_play(2); //if lost, play losing sound
+
+    oam_clear();
+    ppu_wait_nmi();
+
+    color_emphasis(emphasis);
+    pal_bg_bright(7);
+    delay(NUM_FLASH_FRAMES);
+
+    color_emphasis(COL_EMP_NORMAL);
+    pal_bright(4);
+    delay(NUM_WAIT_FRAMES);
+
+    pal_fade_to(4, 0);
+
+    ppu_off();
+    vram_adr(NAMETABLE_A);
+    vram_fill(BLANK_TILE, 32 * 30);
+    vram_adr(NAMETABLE_A);
+    vram_unrle(gameEndScreenNametable);
+    pal_bg(gameEndPalette);
+
+    //add badges (e.g. if game was hard or easy)
+    if(!IS_GAME_HARD()) {
+
+        printTile(0x82, NTADR_A(18, 12));
+
+        vram_adr(0x23DC); //get the right palette
+        vram_put(0b01001100);
+    }
+    
+    printHexNumber(boardSeed, 11, 18);
+    one_vram_buffer(OPENING_BRACKET, NTADR_A(16, 18));
+}
+
+void endGameB(void) {
+
+    flush_vram_update2(); //flush any vram updates
+
+    pal_bright(0);
+    ppu_on_all();
+
+    selectionArrowIndex = 0;
+    selectionArrowNumIndices = sizeof(gameEndScreenPositionsX);
+    selectionArrowPositionsX = gameEndScreenPositionsX;
+    selectionArrowPositionsY = gameEndScreenPositionsY;
+    selectionArrowShouldUseArrow = gameEndScreenShouldUseArrow;
+
+    selectionArrow.xPos = gameEndScreenPositionsX[0];
+    selectionArrow.yPos = gameEndScreenPositionsY[0];
+
+    temp0 = 0;
+    printNumber(numMines, 17, 18);
+    
+    if(numMines < 10) temp1 = 1;
+    else if(numMines < 100) temp1 = 2;
+    else temp1 = 3;
+
+    one_vram_buffer(CLOSING_BRACKET, NTADR_A(17 + temp1, 18));
+
+    delay(60);
+
+    pal_fade_to(0, 4);
+
+    gameMode &= ~(0b111); //set to game end screen
+    gameMode |= 0b011;
+
+    temp0 = TRUE;
+}
+
+void winGame(void) {
+
+    endGameA(COL_EMP_GREEN);
+
+    if(!(gameMode & (0b1u << 6))) {
+
+        printTileVramBuffer(0xA6, NTADR_A(18, 14));
+    }
+
+    if(IS_GAME_CHEATS()) {
+
+        printTileVramBuffer(0xA8, NTADR_A(18, 16));
+    }
+
+    music_play(GAME_END_MUSIC);
+
+    printString(youWonText, sizeof(youWonText), 12, 10);
+    printTime(11, 14);
+
+    endGameB();
+}
+
+void loseGame(void) {
+
+    if(IS_GAME_CHEATS()) {
+
+        one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0);
+        debugTemp0 = 5;
+
+        sample_play(2);
+    } else {
+
+        one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0);
+        endGameA(COL_EMP_RED);
+
+        printString(gameOverText, sizeof(gameOverText), 11, 10);
+        clearScreenPrecalculated(5, NTADR_A(11, 12)); //don't show the time text
+
+        endGameB();
+    }
+}
+
+void updateGameEnd(void) {
+
+    updateSelectionArrow();
+
+    if(BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START)) {
+
+        switch(selectionArrowIndex) {
+
+            case 0: //new game
+
+            isCustomSeed = FALSE;
+            oam_clear();
+            newGame();
+
+            gameMode &= ~(0b1 << 5); //clear the paused state
+            break;
+
+            case 1: //new game
+
+            gameMode &= ~(0b111); //set the gamemode to title screen (mode 0)
+            oam_clear();
+            music_stop();
+            showTitleScreen();
+
+            break;
+        }
+    }
+}
+
+#pragma endregion
+
 #pragma region Game Update
 
 //uses temp0, temp1, temp2, temp3, temp4, temp5, tempShort0
@@ -718,14 +893,17 @@ inline void gameUpdateDifficultyIndependent(void) {
 
     //update cursor x and y, wrap around the screen as needed
 
-    if(debugTemp0) {
+    if(debugTemp0) { //debug stuph
 
         --debugTemp0;
         if(!debugTemp0) one_vram_buffer(0x09, PALETTE_MEMORY_BEGIN + 0x0); //make the screen normal again
     }
 
     //BEGIN using temp3 = some temp stuff
+    //BEGIN using temp4 = was button pressed?
     //used assembly for the bpl instruction, the compiler might not generate it if I compared the number to 255 or something like that
+
+    temp4 = FALSE;
 
     if(BUTTON_DOWN(PAD_RIGHT)) {
 
@@ -736,6 +914,7 @@ inline void gameUpdateDifficultyIndependent(void) {
         __asm__("ldx #$00");
         __asm__("@padRightSkip:");
         __asm__("stx %v", cursorX);
+        temp4 = TRUE;
     }
 
     if(BUTTON_DOWN(PAD_LEFT)) {
@@ -747,6 +926,7 @@ inline void gameUpdateDifficultyIndependent(void) {
         __asm__("dex");
         __asm__("@padLeftSkip:");
         __asm__("stx %v", cursorX);
+        temp4 = TRUE;
     }
 
     if(BUTTON_DOWN(PAD_DOWN)) {
@@ -758,6 +938,7 @@ inline void gameUpdateDifficultyIndependent(void) {
         __asm__("ldx #00");
         __asm__("@padDownSkip:");
         __asm__("stx %v", cursorY);
+        temp4 = TRUE;
     }
 
     if(BUTTON_DOWN(PAD_UP)) {
@@ -769,12 +950,13 @@ inline void gameUpdateDifficultyIndependent(void) {
         __asm__("dex");
         __asm__("@padUpSkip:");
         __asm__("stx %v", cursorY);
+        temp4 = TRUE;
     }
 
-    //BEGIN using temp2, printNumber vars
-    //END using temp3
+    if(temp4) sfx_play(SFX_SELECT, 0);
 
-    //END using temp1
+    //BEGIN using temp2, printNumber vars
+    //END using temp1, temp3, temp4
 
     //alternate the color palette of the selector every 32 frames
     if((frameCount & 0b11111) == 0) {
@@ -794,12 +976,12 @@ inline void gameUpdateDifficultyIndependent(void) {
 
             if(IS_GAME_HARD()) {
 
-                one_vram_buffer(0x9 + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 4));
+                one_vram_buffer(0x9 + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 5));
                 ++temp0;
             } else {
 
                 temp1 = cursorX << 1;
-                temp3 = (cursorY << 1) + 4;
+                temp3 = (cursorY << 1) + 6;
                 one_vram_buffer(0xA2, NTADR_A(temp1, temp3));
                 one_vram_buffer(0xA3, NTADR_A(temp1 + 1, temp3));
 
@@ -827,12 +1009,12 @@ inline void gameUpdateDifficultyIndependent(void) {
 
             if(IS_GAME_HARD()) {
 
-                one_vram_buffer(0xA + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 4));
+                one_vram_buffer(0xA + (((cursorX & 0b1) ^ (cursorY & 0b1)) << 1), NTADR_A(cursorX, cursorY + 5));
                 ++temp0;
             } else {
 
                 temp1 = cursorX << 1;
-                temp3 = (cursorY << 1) + 4;
+                temp3 = (cursorY << 1) + 6;
                 one_vram_buffer(0xA4, NTADR_A(temp1, temp3));
                 one_vram_buffer(0xA5, NTADR_A(temp1 + 1, temp3));
 
@@ -854,7 +1036,8 @@ inline void gameUpdateDifficultyIndependent(void) {
             }
         }
 
-        printNumber(numFlags, 2, 3);
+        sample_play(1);
+        printNumber(numFlags, 4, 3);
     }
 
     //END using temp1, temp2, temp3
@@ -862,7 +1045,7 @@ inline void gameUpdateDifficultyIndependent(void) {
     //BEGIN using temp1: saved mined around tile while temp2 is used for other things
     //BEGIN using temp2: mines around tile
     
-    //cursor x and y are about to be clobbered so preserve them here
+    //cursor x and y are about to be clobbered so let's preserve them here
     tempTileX = cursorX;
     tempTileY = cursorY;
 
@@ -871,18 +1054,17 @@ inline void gameUpdateDifficultyIndependent(void) {
 
         if(BUTTON_DOWN(PAD_A)) {
 
-            if(getTileIsMine()) {
+            if(getTileIsMine()) { //oof
 
-                //first of all, oof
-                one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove)
-                debugTemp0 = 5;
+                loseGame();
+                if(!IS_GAME_CHEATS()) return;
             } else {
 
                 pushCursorXY();
                 countMinesAroundTile();
                 popCursorXY();
 
-                if(temp2 == 0) floodFillZeros(); //enjoy
+                if(temp2 == 0) floodFillZeros();
                 else activateTileNoCount();
             }
         }
@@ -916,11 +1098,10 @@ inline void gameUpdateDifficultyIndependent(void) {
 
                 popCursorXY();
 
-                if(getTileIsMine()) {
+                if(getTileIsMine()) { //oof
 
-                    //oof
-                    one_vram_buffer(0x06, PALETTE_MEMORY_BEGIN + 0x0); //second of all, make the screen red (temp, todo remove, make screen be destroyed)
-                    debugTemp0 = 5;
+                    loseGame();
+                    if(!IS_GAME_CHEATS()) return;
                 } else {
 
                     pushCursorXY();
@@ -957,72 +1138,7 @@ inline void gameUpdateDifficultyIndependent(void) {
 
         //horray! good job
 
-        oam_clear();
-        ppu_wait_nmi();
-
-        color_emphasis(COL_EMP_GREEN);
-        pal_bg_bright(7);
-        delay(NUM_FLASH_FRAMES);
-
-        color_emphasis(COL_EMP_NORMAL);
-        pal_bright(4);
-        delay(NUM_WAIT_FRAMES);
-
-        pal_fade_to(4, 0);
-
-        ppu_off();
-        vram_adr(NAMETABLE_A);
-        vram_fill(BLANK_TILE, 32 * 30);
-        vram_adr(NAMETABLE_A);
-        vram_unrle(gameEndScreenNametable);
-        pal_bg(gameEndPalette);
-
-        //add game features
-        if(!IS_GAME_HARD()) {
-
-            printTile(0x82, NTADR_A(18, 12));
-
-            vram_adr(0x23DC); //get the right palette
-            vram_put(0b01001100);
-        }
-
-        if(!(gameMode & (0b1 << 6))) {
-
-            printTile(0xA6, NTADR_A(18, 14));
-        }
-
-        if(gameMode & (0b1 << 4)) {
-
-            printTile(0xA8, NTADR_A(18, 16));
-        }
-
-        pal_bright(0);
-        ppu_on_all();
-
-        one_vram_buffer(0b00001100, 0x23F4);
-        printString(youWonText, sizeof(youWonText), 12, 10);
-        printTime(11, 14);
-        printHexNumber(boardSeed, 11, 18);
-        one_vram_buffer(OPENING_BRACKET, NTADR_A(16, 18));
-
-        temp0 = 0;
-        printNumber(numMines, 17, 18);
-        
-        if(numMines < 10) temp1 = 1;
-        else if(numMines < 100) temp1 = 2;
-        else temp1 = 3;
-
-        one_vram_buffer(CLOSING_BRACKET, NTADR_A(17 + temp1, 18));
-
-        delay(60);
-
-        pal_fade_to(0, 4);
-
-        gameMode &= ~(0b111); //set to game end screen
-        gameMode |= 0b011;
- 
-        temp0 = TRUE;
-
+        winGame();
         return;
     }
 
@@ -1040,15 +1156,18 @@ inline void gameUpdateDifficultyIndependent(void) {
 
         //set up the correct selection arrow variables
         selectionArrowIndex = 0;
-        selectionArrowNumIndices = sizeof(gamePauseMenuPositionsX);
+        selectionArrowNumIndices = sizeof(gamePauseMenuPositionsX) - 1;
+        if(IS_GAME_CHEATS()) ++selectionArrowNumIndices;
         selectionArrowPositionsX = gamePauseMenuPositionsX;
         selectionArrowPositionsY = gamePauseMenuPositionsY;
         selectionArrowShouldUseArrow = gamePauseMenuShouldUseArrow;
 
-        printString(pausedText, sizeof(pausedText), 12, 1);
-        printString(backText, sizeof(backText), 13, 2);
-        printString(newGameText, sizeof(newGameText), 13, 3);
-        printString(leaveText, sizeof(leaveText), 27, 2);
+        printString(pausedText, sizeof(pausedText), 15, 2);
+
+        printString(backText, sizeof(backText), 16, 3);
+        printString(newGameText, sizeof(newGameText), 16, 4);
+        printString(leaveText, sizeof(leaveText), 26, 3);
+        if(IS_GAME_CHEATS()) printString(winText, sizeof(winText), 26, 4);
 
         selectionArrow.xPos = gamePauseMenuPositionsX[0];
         selectionArrow.yPos = gamePauseMenuPositionsY[0];
@@ -1071,7 +1190,7 @@ inline void gameUpdateDifficultyIndependent(void) {
             } else timePlayedSeconds = 0;
         }
 
-        printTime(7, 3);
+        printTime(9, 3);
     }
 
     //END all above (i don't want to write them out again)
@@ -1088,7 +1207,7 @@ inline void gameUpdateHard(void) {
     }
 
     selectionSprite.hardSelectionSprite.xPos = cursorX << 3; //x8 to align w/ tiles
-    selectionSprite.hardSelectionSprite.yPos = (cursorY << 3) + 31; //1 less to be 1 higher (properly aligned)
+    selectionSprite.hardSelectionSprite.yPos = (cursorY << 3) + 39; //1 less to be properly aligned
 
     oam_clear();
     oam_spr(selectionSprite.hardSelectionSprite.xPos, selectionSprite.hardSelectionSprite.yPos,
@@ -1104,7 +1223,7 @@ inline void gameUpdateEasy(void) {
     }
 
     selectionSprite.easySelectionSprite.xPos = cursorX << 4;
-    selectionSprite.easySelectionSprite.yPos = (cursorY << 4) + 31; //1 less to be 1 higher (properly aligned)
+    selectionSprite.easySelectionSprite.yPos = (cursorY << 4) + 47; //1 less to be 1 higher (properly aligned)
 
     oam_clear();
     oam_meta_spr(selectionSprite.easySelectionSprite.xPos, selectionSprite.easySelectionSprite.yPos, easySelectorMetasprite);
@@ -1123,7 +1242,7 @@ void generateBoard(void) {
     //temp2 = array size to go through
     //temp3 = boardIsMine[global_i]
 
-    //gameMode |= 0b1 << 4; //set board is updating
+    gameMode |= (0b1 << 7); //set board is generating
 
     if(IS_GAME_HARD()) {
 
@@ -1175,7 +1294,7 @@ void generateBoard(void) {
         boardIsFlag[global_i] = 0;
     }
 
-    gameMode &= ~(0b1 << 4); //clear board is updating
+    gameMode &= ~(0b1 << 7); //clear board is generating
 }
 
 //uses global_i, global_j, temp1, temp2, do when the ppu is off
@@ -1188,8 +1307,8 @@ void displayBoard(void) {
     vram_adr(NTADR_A(0, 0)); //clear the screen
     vram_fill(BLANK_TILE, 32 * 30);
 
-    printTile(0x60, NTADR_A(0, 2)); //draw the flag and the clock
-    printTile(0x62, NTADR_A(5, 2));
+    printTile(0x60, NTADR_A(2, 2)); //draw the flag and the clock
+    printTile(0x62, NTADR_A(7, 2));
 
     if(IS_GAME_HARD()) {
 
@@ -1197,7 +1316,7 @@ void displayBoard(void) {
 
             for(global_j = 0; global_j < boardHeight; ++global_j) {
                 
-                vram_adr(NTADR_A(global_i, global_j + 4));
+                vram_adr(NTADR_A(global_i, global_j + 5));
                 vram_put(0x9 + (((global_i & 0b1) ^ (global_j & 0b1)) << 1)); //alternates as a checkerboard
             }
         }
@@ -1214,13 +1333,7 @@ void displayBoard(void) {
                 cursorY = global_j;
                 temp4 = getTileIsMine() << 1;*/
 
-                printTile(0xA2, NTADR_A(global_i << 1, (global_j << 1) + 4));
-                /*vram_adr(NTADR_A(global_i << 1, (global_j << 1) + 4));
-                vram_put(0xA2 + temp4);
-                vram_put(0xA3 + temp4);
-                vram_adr(NTADR_A(global_i << 1, (global_j << 1) + 5));
-                vram_put(0xB2 + temp4);
-                vram_put(0xB3 + temp4);*/
+                printTile(0xA2, NTADR_A(global_i << 1, (global_j << 1) + 6));
             }
         }
 
@@ -1239,7 +1352,7 @@ void displayBoard(void) {
     }
 
     vram_adr(0x23C0); //make the flag in the top left blue, and the clock black
-    vram_put(0b00100010);
+    vram_put(0b10100000);
     vram_put(0b00000000);
     vram_put(0b00000000);
 
@@ -1249,6 +1362,11 @@ void displayBoard(void) {
     //pre-activate some tiles at the start to make it less tedious
 
     if(numMines == 0) goto finished; //AAAUGH HE USED GOTO ARREST HIM
+
+    if(IS_GAME_HARD()) {
+
+        if((HARD_MAX_X * HARD_MAX_Y) - (unsigned short)numMines <= 1) goto finished;
+    } else if((EASY_MAX_X * EASY_MAX_Y) - (unsigned short)numMines <= 1) goto finished;
 
     for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
         
@@ -1271,18 +1389,18 @@ void displayBoard(void) {
         }
     }
 
-    if(IS_GAME_HARD()) {
-
-        if((HARD_MAX_X * HARD_MAX_Y) - numMines <= 1) goto finished;
-    } else if((EASY_MAX_X * EASY_MAX_Y) - numMines <= 1) goto finished;
-
     for(cursorX = 0; cursorX < boardWidth; ++cursorX) {
         
         for(cursorY = 0; cursorY < boardHeight; ++cursorY) {
 
             if(!getTileIsMine()) {
 
-                activateTile();
+                pushCursorXY();
+                countMinesAroundTile();
+                popCursorXY();
+
+                activateTileNoCount();
+
                 goto finished;
             }
         }
@@ -1293,14 +1411,14 @@ void displayBoard(void) {
     cursorX = 0;
     cursorY = 0;
 
-    if(temp0 >= (MAX_SCREEN_UPDATES_PER_FRAME - 18)) {
+    if(temp0 >= (MAX_SCREEN_UPDATES_PER_FRAME - 18)) { //9 potential tiles being updated
 
         ppu_wait_nmi();
         temp0 = 0;
     }
 
-    printNumber(numFlags, 2, 3);
-    printTime(7, 3);
+    printNumber(numFlags, 4, 3);
+    printTime(9, 3);
 }
 
 #pragma endregion
@@ -1311,27 +1429,43 @@ inline void setToEasyMode(void) {
 
     gameMode &= ~(0b1 << 3);
     tileBitShiftOffset = 4;
-
     boardWidth = EASY_MAX_X;
     boardHeight = EASY_MAX_Y;
 
     numMines = EASY_NUM_MINES;
-    maxMines = (gameMode & (0b1 << 4)) ? 255 : EASY_MAX_MINES;
+    if(gameMode & (0b1 << 4)) {
+
+        maxMines = 255;
+        minMines = 0;
+    } else {
+
+        maxMines = EASY_MAX_MINES;
+        minMines = EASY_MIN_MINES;
+    }
 }
 
 inline void setToHardMode(void) {
 
     gameMode |= (0b1 << 3);
     tileBitShiftOffset = 5;
-
     boardWidth = HARD_MAX_X;
     boardHeight = HARD_MAX_Y;
+
     numMines = HARD_NUM_MINES;
-    maxMines = (gameMode & (0b1 << 4)) ? 255 : HARD_MAX_MINES;
+    if(gameMode & (0b1 << 4)) {
+
+        maxMines = 255;
+        minMines = 0;
+    } else {
+
+        maxMines = HARD_MAX_MINES;
+        minMines = HARD_MIN_MINES;
+    }
 }
 
-//call while ppu is off
 inline void initState(void) {
+
+    ppu_off();
 
     prevController = 0;
     controller = 0;
@@ -1349,23 +1483,28 @@ inline void initState(void) {
     selectionArrow.tile = 0x02;
     selectionArrow.attributes = 0b000000000;
     
-    setToEasyMode();
+    setToEasyMode(); //default easy mode
     isCustomSeed = FALSE;
     customSeed = 0;
     isNumberArrowUp = TRUE;
 
     pal_spr(sprPalette);
     bank_spr(1);
+    
+    set_vram_buffer();
 }
 
 inline void newGame(void) {
 
     ppu_off();
+    music_stop();
+    pal_bright(4);
 
     clear_vram_buffer(); //clear any pending vram updates...
     oam_clear(); //...and any remaining sprites
     gameMode &= ~(0b1 << 5); //set game not paused (for if pressed from the pause menu)
-    gameMode = (gameMode & ~(0b111)) | 0b001; //set the gamemode to playing a game (gamemode 1)
+    gameMode &= ~(0b111);
+    gameMode |= 0b001; //set the gamemode to playing a game (gamemode 1)
 
     cursorX = 0;
     cursorY = 0;
@@ -1379,6 +1518,8 @@ inline void newGame(void) {
 
     generateBoard();
     displayBoard();
+
+    music_play(GAME_NORMAL_MUSIC);
 }
 
 //uses temp4, temp3
@@ -1392,6 +1533,7 @@ void updateSelectionArrow(void) {
 
             ++selectionArrowIndex;
             if(selectionArrowIndex == selectionArrowNumIndices) selectionArrowIndex = 0;
+            sfx_play(SFX_SELECT, 0);
         } else if(BUTTON_DOWN(PAD_UP) || (BUTTON_DOWN(PAD_LEFT) && temp4)) {
 
             __asm__("ldx %v", selectionArrowIndex);
@@ -1402,6 +1544,7 @@ void updateSelectionArrow(void) {
             __asm__("dex");
             __asm__("@dontUnderflow:");
             __asm__("stx %v", selectionArrowIndex);
+            sfx_play(SFX_SELECT, 0);
         }
     }
 
@@ -1420,22 +1563,25 @@ void updateSelectionArrow(void) {
         ++fillStackPos;
         fillStackX[fillStackPos] = temp4; //save it
 
-        temp4 >>= 1;
+        temp4 >>= 1; //divide by 2 to make a smooth effect (the important part)
 
         if(temp4 & (0b1 << 6)) { //if negative, bit 6 instead of 7 because temp4 was just bitshifted by 1 (div by 2)
 
-            --temp4; //make temp4 negative (but treat it as a 7 bit number, kinda weird but whatever)
+            --temp4; //make temp4 negative if it was a 7 bit number, kinda weird but whatever
             temp4 ^= 0b01111111;
             selectionArrow.yPos -= temp4;
 
-            //this approach will usually lead to being 1 off with no way to get there, so make it get there if it's 1 away
+            //this approach will 50% of the time be 1 off with no way to get there (1 / 2 = .5 -> 0), so make it get there if it's 1 away
             if(fillStackX[fillStackPos] == 1) --selectionArrow.yPos;
         } else {
 
             selectionArrow.yPos += temp4;
             
+            //same as above
             if(fillStackX[fillStackPos] == 0b11111111) ++selectionArrow.yPos;
         }
+
+        //update x pos
 
         temp4 = selectionArrowTargetPosX - selectionArrow.xPos;
         fillStackX[fillStackPos] = temp4; //save it
@@ -1462,133 +1608,6 @@ void updateSelectionArrow(void) {
     }
 }
 
-/*
-
-//uses the tile in temp1
-void setRleTile(void) {
-
-    one_vram_buffer(temp1, NTADR_A(global_i, global_j));
-    ++temp0;
-    if(temp0 >= MAX_SCREEN_UPDATES_PER_FRAME) {
-
-        ppu_wait_nmi();
-        temp0 = 0;
-    }
-}
-
-//uses temp1, temp2, temp3, ushort_i, global_i, global_j, expects that x and y are divisible by 2
-void unrleWithCoords(uchar x, uchar y, uchar* data) {
-
-    global_i = x;
-    global_j = y;
-    temp2 = FALSE;
-    temp3 = 0;
-
-    while(TRUE) {
-
-        switch(temp1 & 0b11) {
-
-            case RLE_SINGLE_TILE:
-
-            temp1 >>= 2;
-            setRleTile();
-            break;
-
-            case RLE_MULTI_TILE:
-
-            temp1 >>= 2; //extract length
-            temp3 = temp1;
-            ++ushort_i;
-            temp1 = data[ushort_i]; //extract tile type
-
-            while(temp3 > 0) {
-
-                setRleTile();
-                --temp3;
-            }
-
-            break;
-
-            case RLE_NEW_LINE:
-
-            ++global_j;
-            break;
-
-            case RLE_ATT_TABLE:
-
-            goto doAttributeData;
-        }
-
-        ++global_i;
-        ++ushort_i;
-    }
-
-    doAttributeData:
-
-    global_i = x >> 1;
-    global_j = y >> 1;
-
-    while(TRUE) {
-
-        temp1 = data[ushort_i];
-        if(temp2) { //attribute data
-
-            switch(temp1 & 0b11) {
-
-                case RLE_SINGLE_TILE:
-
-                ++ushort_i;
-                
-                one_vram_buffer(data[ushort_i], 0x23C0 + ((global_j << 3) + global_i));
-                
-                ++temp0;
-                if(temp0 >= MAX_SCREEN_UPDATES_PER_FRAME) {
-
-                    ppu_wait_nmi();
-                    temp0 = 0;
-                }
-
-                break;
-
-                case RLE_MULTI_TILE:
-
-                temp1 >>= 2;
-                temp3 = temp1;
-
-                ++ushort_i;
-                temp1 = data[ushort_i];
-
-                while(temp3 > 0) {
-
-                    one_vram_buffer(temp1, 0x23C0 + ((global_j << 3) + global_i));
-                    --temp3;
-                    
-                    ++temp0;
-                    if(temp0 >= MAX_SCREEN_UPDATES_PER_FRAME) {
-
-                        ppu_wait_nmi();
-                        temp0 = 0;
-                    }
-                }
-
-                break;
-
-                case RLE_NEW_LINE:
-
-                ++global_j;
-                break;
-
-                case RLE_ATT_TABLE:
-
-                return; //finished (phew)
-            }
-        }
-
-        ++global_i;
-        ++ushort_i;
-    }
-}*/
-
 #pragma endregion
 
 #pragma region Paused Game
@@ -1597,17 +1616,19 @@ inline void gameUpdatePaused(void) {
 
     updateSelectionArrow();
 
-    if(BUTTON_DOWN(PAD_START)) {
+    if(BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START)) {
 
         switch(selectionArrowIndex) {
 
             case 0: //back to game
 
-            clearScreen(sizeof(pausedText), 12, 1);
-            clearScreen(sizeof(backText), 13, 2);
-            clearScreen(sizeof(newGameText), 13, 3);
-            clearScreen(sizeof(leaveText), 27, 2);
-            gameMode &= ~(0b1 << 5);
+            clearScreen(sizeof(pausedText), 15, 2);
+            clearScreen(sizeof(backText), 16, 3);
+            clearScreen(sizeof(newGameText), 16, 4);
+            clearScreen(sizeof(leaveText), 26, 3);
+            clearScreen(sizeof(winText), 26, 4);
+
+            gameMode &= ~(0b1 << 5); //clear the paused state
             break;
 
             case 1: //new game
@@ -1621,8 +1642,15 @@ inline void gameUpdatePaused(void) {
             case 2: //back to title screen
 
             gameMode &= ~(0b111); //set the gamemode to title screen (mode 0)
+            music_stop();
             oam_clear();
             showTitleScreen();
+
+            break;
+
+            case 3:
+
+            winGame();
 
             break;
         }
@@ -1642,21 +1670,6 @@ void showTitleScreen(void) {
     vram_unrle(titleScreenNametable);
     pal_bg(titleScreenBgPalette);
     ppu_on_all();
-}
-
-void updateTitleScreen(void) {
-
-    //flash the press start text every 32 frames
-    if((frameCount & 0b11111) == 0) {
-
-        if((frameCount & 0b111111) == 0) printString(pressStartText, sizeof(pressStartText), 10, 17);
-        else clearScreen(sizeof(pressStartText), 10, 17);
-    }
-
-    if(BUTTON_DOWN(PAD_START)) {
-
-        loadSelectScreen();
-    }
 }
 
 void showSelectScreen(void) {
@@ -1690,7 +1703,23 @@ void loadSelectScreen(void) {
     showSelectScreen();
 }
 
-//uses temp0, temp1, temp2
+void updateTitleScreen(void) {
+
+    //flash the press start text every 32 frames
+    if((frameCount & 0b11111) == 0) {
+
+        if((frameCount & 0b111111) == 0) printString(pressStartText, sizeof(pressStartText), 10, 17);
+        else clearScreen(sizeof(pressStartText), 10, 17);
+    }
+
+    if(BUTTON_DOWN(PAD_START)) {
+
+        sfx_play(SFX_SELECT, 0);
+        loadSelectScreen();
+    }
+}
+
+//uses temp0, temp1, temp2, tempShort0
 void updateGameSelection(void) {
 
     printNumber(numMines, 6, 12);
@@ -1712,6 +1741,8 @@ void updateGameSelection(void) {
                 temp3 = TRUE;
                 goto skipNA;
             }
+            
+            sfx_play(SFX_SELECT, 0);
         } else if(BUTTON_DOWN(PAD_LEFT)) {
 
             if(!isNumberArrowUp) isNumberArrowUp = TRUE;
@@ -1721,9 +1752,11 @@ void updateGameSelection(void) {
                 temp3 = TRUE;
                 goto skipNA;
             }
+            
+            sfx_play(SFX_SELECT, 0);
         }
 
-        temp0 = BUTTON_DOWN(PAD_A);
+        temp0 = BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START);
         temp1 = BUTTON_DOWN(PAD_B);
 
         if(isNumberArrowUp) {
@@ -1731,16 +1764,18 @@ void updateGameSelection(void) {
             one_vram_buffer(0x1E, NTADR_A(3, 12));
             one_vram_buffer(0x0F, NTADR_A(4, 12));
 
-            if(temp0 && numMines <= (minMines - 1)) ++numMines;
-            if(temp1 && numMines <= (minMines - 10)) numMines += 10;
+            if(temp0 && numMines < maxMines) ++numMines;
+            if(temp1 && numMines <= (maxMines - 10)) numMines += 10;
         } else {
 
             one_vram_buffer(0x0E, NTADR_A(3, 12));
             one_vram_buffer(0x1F, NTADR_A(4, 12));
 
-            if(temp0 && numMines >= minMines) --numMines;
-            if(temp1 && numMines >= minMines + 10) numMines -= 10;
+            if(temp0 && numMines > minMines) --numMines;
+            if(temp1 && numMines >= (minMines + 10)) numMines -= 10;
         }
+
+        if(temp0 || temp1) sfx_play(SFX_SELECT, 0);
     } else if(gameSelectShouldUseArrow[3] == FALSE) {
         
         //make the arrows white
@@ -1760,6 +1795,8 @@ void updateGameSelection(void) {
                 temp3 = TRUE;
                 goto skipNA;
             }
+            
+            sfx_play(SFX_SELECT, 0);
         } else if(BUTTON_DOWN(PAD_LEFT)) {
 
             isNumberArrowUp = FALSE;
@@ -1771,17 +1808,20 @@ void updateGameSelection(void) {
                 temp3 = TRUE;
                 goto skipNA;
             }
+            
+            sfx_play(SFX_SELECT, 0);
         }
         
         one_vram_buffer(UNDERSCORE, NTADR_A(14 + temp1, 17));
         
-        if(BUTTON_DOWN(PAD_A)) {
+        if(BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START)) {
 
             tempShort0 = (customSeed >> ((3 - temp1) << 2));
             ++tempShort0;
             tempShort0 &= 0b1111;
             customSeed &= ~(0b1111 << ((3 - temp1) << 2));
             customSeed |= (tempShort0 << ((3 - temp1) << 2));
+            sfx_play(SFX_SELECT, 0);
         } else if(BUTTON_DOWN(PAD_B)) {
 
             tempShort0 = (customSeed >> ((3 - temp1) << 2));
@@ -1789,17 +1829,31 @@ void updateGameSelection(void) {
             tempShort0 &= 0b1111;
             customSeed &= ~(0b1111 << ((3 - temp1) << 2));
             customSeed |= (tempShort0 << ((3 - temp1) << 2));
+            sfx_play(SFX_SELECT, 0);
         }
 
-        if(customSeed == 0xCB58 && BUTTON_DOWN(PAD_SELECT)) {
+        if(customSeed == 0xCB58 && BUTTON_DOWN(PAD_SELECT) && !IS_GAME_CHEATS()) {
             
-            gameMode |= (0b1 << 4);
-            one_vram_buffer(0x28, PALETTE_MEMORY_BEGIN);
-            delay(5);
-            one_vram_buffer(0x1B, PALETTE_MEMORY_BEGIN);
+            gameMode |= (0b1u << 4);
+            controller &= ~(PAD_SELECT); //to prevent the game from starting immediately
 
             minMines = 0;
             maxMines = 255;
+            
+            isCustomSeed = FALSE;
+            customSeed = 0;
+            selectionArrowIndex = 0;
+            gameSelectShouldUseArrow[3] = TRUE;
+
+            one_vram_buffer(OPENING_BRACKET, NTADR_A(9, 16));
+            one_vram_buffer(CLOSING_BRACKET, NTADR_A(12, 16));
+
+            one_vram_buffer(BLANK_TILE, NTADR_A(3, 16));
+            one_vram_buffer(BLANK_TILE, NTADR_A(7, 16));
+
+            one_vram_buffer(0x28, PALETTE_MEMORY_BEGIN);
+            delay(5);
+            one_vram_buffer(0x1B, PALETTE_MEMORY_BEGIN);
         }
     } else {
 
@@ -1815,6 +1869,8 @@ void updateGameSelection(void) {
         if(BUTTON_DOWN(PAD_A) || BUTTON_DOWN(PAD_START)) {
 
             switch(selectionArrowIndex) {
+
+                sfx_play(SFX_SELECT, 0);
 
                 case 0: //set to easy mode
 
@@ -1868,10 +1924,18 @@ void updateGameSelection(void) {
 
                 startGame:
 
-                if(customSeed == 0 && !(gameMode & (0b1 << 4))) isCustomSeed = FALSE;
+                if(customSeed == 0 && !IS_GAME_CHEATS()) isCustomSeed = FALSE; //seed of 0 messes things up so don't let it happen
+                
+
+                music_play(GAME_START_MUSIC);
+                
+                one_vram_buffer(0x16, PALETTE_MEMORY_BEGIN);
+                
+                delay(132);
+                pal_fade_to(4, 0);
+
                 frameCount = 0;
                 newGame();
-
                 return;
 
                 default:
@@ -1883,7 +1947,11 @@ void updateGameSelection(void) {
 
     skipNA:
 
-    if(BUTTON_DOWN(PAD_SELECT)) goto startGame;
+    if(BUTTON_DOWN(PAD_SELECT)) { 
+        
+        sfx_play(SFX_SELECT, 0);
+        goto startGame;
+    }
 
     updateSelectionArrow(); //done last because otherwise it messed with the number arrow
 }
@@ -1899,10 +1967,8 @@ void update(void) {
 
     case 0b001: //playing the game
 
-    if(IS_GAME_PAUSED()) {
-
-        gameUpdatePaused();
-    } else {
+    if(IS_GAME_PAUSED()) gameUpdatePaused();
+    else {
 
         gameUpdateDifficultyIndependent();
 
@@ -1918,11 +1984,12 @@ void update(void) {
 
     break;
 
-    case 0b011: //game won
+    case 0b011: //game end
 
+    updateGameEnd();
     break;
 
-    case 0b000: //0 or anything else (safest to default back to the title screen, I guess?)
+    case 0b000: //title screen
     default:
 
         updateTitleScreen();
